@@ -39,7 +39,8 @@ MESSAGES = {
                 "Available commands:\n"
                 "/start - Link your registration or welcome message\n"
                 "/status - Check your registration progress\n"
-                "/help - Show this help message\n\n"
+                "/help - Show this help message\n"
+                "/cancel <reason> - Cancel your registration with reason\n\n"
                 "To link your registration, use the link provided after filling out the form.\n"
                 "Example: /start SUBM_12345"
     },
@@ -66,7 +67,8 @@ MESSAGES = {
                 "פקודות זמינות:\n"
                 "/start - קישור הרשמה או הודעת ברוך הבא\n"
                 "/status - בדיקת התקדמות הרשמה\n"
-                "/help - הצגת הודעת עזרה זו\n\n"
+                "/help - הצגת הודעת עזרה זו\n"
+                "/cancel <סיבה> - ביטול הרשמה עם סיבה\n\n"
                 "כדי לקשר את הרשמתך, השתמש בקישור שניתן לאחר מילוי הטופס.\n"
                 "דוגמה: /start SUBM_12345"
     }
@@ -89,18 +91,75 @@ def get_message(language, key, **kwargs):
         except KeyError:
             return f"Message key '{key}' not found"
 
+def build_partner_status_text(status_data, language):
+    """Build detailed partner status text"""
+    labels = MESSAGES[language]['status_labels']
+    
+    # Check if user has partners
+    partner_names = status_data.get('partner_names', [])
+    partner_status = status_data.get('partner_status', {})
+    partner_complete = status_data.get('partner', False)  # Boolean from Google Sheets
+    
+    if not partner_names:
+        # No partners - coming alone
+        if language == 'he':
+            return f"{labels['partner']}: מגיע.ה לבד"
+        else:
+            return f"{labels['partner']}: Coming alone"
+    
+    # Has partners - show detailed status
+    registered_partners = partner_status.get('registered_partners', [])
+    missing_partners = partner_status.get('missing_partners', [])
+    
+    # If we have detailed partner status, show it
+    if len(partner_names) > 1:
+        if language == 'he':
+            partner_header = f"{labels['partner']}: סטטוס הפרטנרים שלך:"
+        else:
+            partner_header = f"{labels['partner']}: Your partners' status:"
+        
+        partner_lines = [partner_header]
+        
+        # Show registered partners
+        if registered_partners:
+            registered_text = ', '.join(registered_partners)
+            completed_text = 'השלמו' if len(registered_partners) > 1 else 'השלים'
+            if language == 'he':
+                partner_lines.append(f"    ✅ {registered_text} {completed_text} את הטופס")
+            else:
+                partner_lines.append(f"    ✅ {registered_text} completed the form")
+        
+        # Show missing partners
+        if missing_partners:
+            missing_text = ', '.join(missing_partners)
+            if language == 'he':
+                partner_lines.append(f"    ❌ {missing_text} עוד לא השלים את הטופס")
+            else:
+                partner_lines.append(f"    ❌ {missing_text} hasn't completed the form yet")
+        
+        return '\n'.join(partner_lines)
+    
+    # Fallback to simple partner status when no detailed info available
+    else:
+        partner_alias = status_data.get('partner_alias', '')
+        if partner_complete:
+            if partner_alias:
+                return f"{labels['partner']}: ✅ ({partner_alias})"
+            else:
+                return f"{labels['partner']}: ✅"
+        else:
+            if partner_alias:
+                return f"{labels['partner']}: ❌ ({partner_alias})"
+            else:
+                return f"{labels['partner']}: ❌"
+
 def get_status_message(status_data):
     """Build a status message in the user's preferred language"""
     language = status_data.get('language', 'en')
     labels = MESSAGES[language]['status_labels']
     
-    # Build partner text
-    partner_text = "❌"
-    if status_data['partner']:
-        if status_data['partner_alias']:
-            partner_text = f"✅ ({status_data['partner_alias']})"
-        else:
-            partner_text = "✅"
+    # Build detailed partner text
+    partner_text = build_partner_status_text(status_data, language)
     
     # Build status text
     status_text = labels['approved'] if status_data['approved'] else labels['waiting_review']
@@ -114,7 +173,7 @@ def get_status_message(status_data):
     # Construct the message
     message = (
         f"{labels['form']}: {'✅' if status_data['form'] else '❌'}\n"
-        f"{labels['partner']}: {partner_text}\n"
+        f"{partner_text}\n"
         f"{labels['get_to_know']}: {'✅' if status_data['get_to_know'] else '❌'}\n"
         f"{labels['status']}: {status_text}\n"
         f"{labels['payment']}: {payment_text}\n"
@@ -189,6 +248,9 @@ def get_column_indices(headers):
         # Language preference column
         elif 'האם תרצו להמשיך בעברית או באנגלית' in header or 'Language Preference' in header:
             column_indices['language_preference'] = i
+        # Returning participant column
+        elif 'האם השתתפת בעבר באחד מאירועי Wild Ginger' in header or 'Previous Wild Ginger Participation' in header:
+            column_indices['returning_participant'] = i
         # New dedicated status columns
         elif 'Form Complete' in header or 'טופס הושלם' in header:
             column_indices['form_complete'] = i
@@ -208,6 +270,15 @@ def get_column_indices(headers):
         # New: Telegram User ID column
         elif 'Telegram User Id' in header or 'מזהה משתמש טלגרם' in header:
             column_indices['telegram_user_id'] = i
+        # Cancellation tracking columns
+        elif 'Cancelled' in header or 'בוטל' in header or 'מבוטל' in header:
+            column_indices['cancelled'] = i
+        elif 'Cancellation Date' in header or 'תאריך ביטול' in header:
+            column_indices['cancellation_date'] = i
+        elif 'Cancellation Reason' in header or 'סיבת ביטול' in header:
+            column_indices['cancellation_reason'] = i
+        elif 'Last Minute Cancellation' in header or 'ביטול ברגע האחרון' in header:
+            column_indices['last_minute_cancellation'] = i
     return column_indices
 
 def find_submission_by_field(field_name: str, field_value: str):
@@ -305,6 +376,116 @@ def update_telegram_user_id(submission_id: str, telegram_user_id: str):
         print(f"❌ Error updating Telegram User ID: {e}")
         return False
 
+def update_form_complete(submission_id: str, form_complete: bool = True):
+    """Update the Form Complete field for a specific submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update Form Complete")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        form_complete_col = column_indices.get('form_complete')
+        
+        if submission_id_col is None or form_complete_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the Form Complete field
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Convert column index to letter using proper function
+                col_letter = column_index_to_letter(form_complete_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell with TRUE/FALSE
+                value = "TRUE" if form_complete else "FALSE"
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[value]]}
+                ).execute()
+                
+                print(f"✅ Updated Form Complete to {value} for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating Form Complete: {e}")
+        return False
+
+def update_get_to_know_complete(submission_id: str, get_to_know_complete: bool = True):
+    """Update the Get To Know Complete field for a specific submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update Get To Know Complete")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        get_to_know_complete_col = column_indices.get('get_to_know_complete')
+        
+        if submission_id_col is None or get_to_know_complete_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the Get To Know Complete field
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Convert column index to letter using proper function
+                col_letter = column_index_to_letter(get_to_know_complete_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell with TRUE/FALSE
+                value = "TRUE" if get_to_know_complete else "FALSE"
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[value]]}
+                ).execute()
+                
+                print(f"✅ Updated Get To Know Complete to {value} for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating Get To Know Complete: {e}")
+        return False
+
 def parse_submission_row(row, column_indices):
     """Parse a row from the sheet into our status format"""
     def get_cell_value(key, default=""):
@@ -353,12 +534,22 @@ def parse_submission_row(row, column_indices):
     coming_alone_or_balance = get_cell_value('coming_alone_or_balance')
     partner_name = get_cell_value('partner_name')
     language_response = get_cell_value('language_preference')
+    returning_participant_response = get_cell_value('returning_participant')
     
     # Determine language preference
     preferred_language = get_language_preference(language_response)
     
-    # Determine if they have a partner
-    has_partner = coming_alone_or_balance != 'לבד' and partner_name  # 'לבד' means 'alone' in Hebrew
+    # Check if user is a returning participant
+    is_returning_participant = get_boolean_value('returning_participant', False)
+    
+    # Handle multiple partners
+    partner_names = parse_multiple_partners(partner_name)
+    has_partner = coming_alone_or_balance != 'לבד' and len(partner_names) > 0  # 'לבד' means 'alone' in Hebrew
+    
+    # For multiple partners, check registration status
+    partner_status = {"all_registered": True, "registered_partners": [], "missing_partners": []}
+    if has_partner:
+        partner_status = check_partner_registration_status(partner_names)
     
     # Parse status into our flow steps - no assumptions, use dedicated columns
     form_complete = get_boolean_value('form_complete', False)
@@ -378,11 +569,249 @@ def parse_submission_row(row, column_indices):
         "paid": paid,
         "group_open": group_open,
         "partner_alias": partner_name if has_partner else None,
+        "partner_names": partner_names,  # List of all partner names
+        "partner_status": partner_status,  # Registration status of all partners
         "coming_alone_or_balance": coming_alone_or_balance,
         "raw_status": get_cell_value('status', ''),  # Keep as fallback/reference
         "telegram_user_id": get_cell_value('telegram_user_id', ''),
-        "language": preferred_language  # Add language preference
+        "language": preferred_language,  # Add language preference
+        "is_returning_participant": is_returning_participant  # Add returning participant info
     }
+
+def parse_multiple_partners(partner_names_string):
+    """Parse multiple partner names from a single string field"""
+    if not partner_names_string or partner_names_string.strip() == '':
+        return []
+    
+    print(f"🔍 Parsing partners from: '{partner_names_string}'")
+    
+    # Common separators for multiple names
+    separators = [',', '&', '+', ' ו ', ' and ', '\n', ';']
+    
+    # Start with the original string
+    names = [partner_names_string]
+    
+    # Split by each separator
+    for separator in separators:
+        new_names = []
+        for name in names:
+            split_names = [n.strip() for n in name.split(separator) if n.strip()]
+            new_names.extend(split_names)
+        names = new_names
+        if len(names) > 1:
+            print(f"   After splitting by '{separator}': {names}")
+    
+    # Filter out empty strings and duplicates
+    unique_names = []
+    for name in names:
+        cleaned_name = name.strip()
+        if cleaned_name and cleaned_name not in unique_names:
+            unique_names.append(cleaned_name)
+    
+    print(f"✅ Final parsed partner names: {unique_names}")
+    return unique_names
+
+def check_partner_registration_status(partner_names):
+    """Check if all partners are registered by searching for their names in the sheet"""
+    if not partner_names:
+        return {"all_registered": True, "registered_partners": [], "missing_partners": []}
+    
+    if not sheets_service:
+        return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+    
+    try:
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        column_indices = get_column_indices(headers)
+        
+        full_name_col = column_indices.get('full_name')
+        if full_name_col is None:
+            return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+        
+        # Get all registered names from the sheet
+        registered_names = []
+        for row in rows:
+            if len(row) > full_name_col and row[full_name_col].strip():
+                registered_names.append(row[full_name_col].strip())
+        
+        print(f"🔍 Checking {len(partner_names)} partners against {len(registered_names)} registered names")
+        print(f"   Partners to check: {partner_names}")
+        
+        # Check each partner
+        registered_partners = []
+        missing_partners = []
+        
+        for partner_name in partner_names:
+            print(f"   Checking partner: '{partner_name}'")
+            found = False
+            
+            # Try exact match first
+            for registered_name in registered_names:
+                if partner_name.strip().lower() == registered_name.strip().lower():
+                    print(f"     ✅ Exact match found: '{registered_name}'")
+                    registered_partners.append(partner_name)
+                    found = True
+                    break
+            
+            # If no exact match, try partial match (more conservative)
+            if not found:
+                for registered_name in registered_names:
+                    # Check if the partner name is a substantial part of the registered name
+                    partner_words = partner_name.strip().lower().split()
+                    registered_words = registered_name.strip().lower().split()
+                    
+                    # At least 80% of partner name words should match
+                    if len(partner_words) >= 2:
+                        matching_words = sum(1 for word in partner_words if word in registered_words)
+                        if matching_words >= len(partner_words) * 0.8:
+                            print(f"     ✅ Partial match found: '{registered_name}' (matches {matching_words}/{len(partner_words)} words)")
+                            registered_partners.append(partner_name)
+                            found = True
+                            break
+                    else:
+                        # For single word names, be more strict
+                        if partner_name.strip().lower() in registered_name.strip().lower():
+                            print(f"     ✅ Single word match found: '{registered_name}'")
+                            registered_partners.append(partner_name)
+                            found = True
+                            break
+            
+            if not found:
+                print(f"     ❌ No match found for: '{partner_name}'")
+                missing_partners.append(partner_name)
+        
+        result = {
+            "all_registered": len(missing_partners) == 0,
+            "registered_partners": registered_partners,
+            "missing_partners": missing_partners
+        }
+        
+        print(f"📊 Partner status result: {result}")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error checking partner registration: {e}")
+        return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+
+def update_cancellation_status(submission_id: str, cancelled: bool = True, reason: str = "", is_last_minute: bool = False):
+    """Update cancellation status with reason and timing information"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update cancellation status")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        cancelled_col = column_indices.get('cancelled')
+        cancellation_date_col = column_indices.get('cancellation_date')
+        cancellation_reason_col = column_indices.get('cancellation_reason')
+        last_minute_col = column_indices.get('last_minute_cancellation')
+        
+        if submission_id_col is None:
+            print("❌ Could not find submission_id column in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update cancellation fields
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Prepare updates
+                updates = []
+                
+                # Update cancelled status
+                if cancelled_col is not None:
+                    col_letter = column_index_to_letter(cancelled_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    value = "TRUE" if cancelled else "FALSE"
+                    updates.append((range_name, value))
+                
+                # Update cancellation date (current date)
+                if cancellation_date_col is not None and cancelled:
+                    from datetime import datetime
+                    col_letter = column_index_to_letter(cancellation_date_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    updates.append((range_name, current_date))
+                
+                # Update cancellation reason
+                if cancellation_reason_col is not None and reason:
+                    col_letter = column_index_to_letter(cancellation_reason_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    updates.append((range_name, reason))
+                
+                # Update last minute flag
+                if last_minute_col is not None:
+                    col_letter = column_index_to_letter(last_minute_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    value = "TRUE" if is_last_minute else "FALSE"
+                    updates.append((range_name, value))
+                
+                # Execute all updates
+                for range_name, value in updates:
+                    result = sheets_service.spreadsheets().values().update(
+                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                        range=range_name,
+                        valueInputOption='RAW',
+                        body={'values': [[value]]}
+                    ).execute()
+                
+                print(f"✅ Updated cancellation status for submission {submission_id}")
+                if reason:
+                    print(f"   Reason: {reason}")
+                if is_last_minute:
+                    print(f"   ⚠️ Last minute cancellation noted")
+                
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating cancellation status: {e}")
+        return False
+
+def is_last_minute_cancellation(event_date_str: str, cancellation_date_str: str = None, threshold_days: int = 7):
+    """Check if cancellation is considered last minute (within threshold days of event)"""
+    try:
+        from datetime import datetime, timedelta
+        
+        if not event_date_str:
+            return False
+        
+        # Parse event date
+        event_date = datetime.strptime(event_date_str, "%Y-%m-%d")
+        
+        # Use current date if no cancellation date provided
+        if cancellation_date_str:
+            cancellation_date = datetime.strptime(cancellation_date_str, "%Y-%m-%d")
+        else:
+            cancellation_date = datetime.now()
+        
+        # Check if cancellation is within threshold days of event
+        days_before_event = (event_date - cancellation_date).days
+        
+        return days_before_event <= threshold_days
+        
+    except Exception as e:
+        print(f"❌ Error checking last minute cancellation: {e}")
+        return False
 
 # --- Get status data (Google Sheets or mock) ---
 def get_status_data(submission_id: str = None, telegram_user_id: str = None):
@@ -423,9 +852,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Link the Telegram User ID to the submission in Google Sheets
             update_telegram_user_id(submission_id, user_id)
             
+            # TASK: new registers - automatically mark them as 'Form Complete' TRUE
+            # If I have a record, that means they filled out the form
+            update_form_complete(submission_id, True)
+            
+            # TASK: returning participant - auto mark 'Get To Know Complete' as TRUE
+            # If they participated in a previous event, they already know the process
+            if status_data.get('is_returning_participant'):
+                update_get_to_know_complete(submission_id, True)
+            
+            # Send welcome message
             await update.message.reply_text(
                 get_message(status_data['language'], 'welcome', name=status_data['alias'])
             )
+            
+            # TASK: chat continues - keep the conversation going after /start
+            # Guide user to their next step instead of letting conversation fade
+            await continue_conversation(update, context, status_data)
         else:
             # Default to English if no submission found
             await update.message.reply_text(
@@ -495,6 +938,163 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         get_message(language, 'help')
     )
 
+async def continue_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE, status_data):
+    """Continue the conversation by guiding user to their next step"""
+    language = status_data.get('language', 'en')
+    
+    # TASK: 'Partner Complete' and 'Get To Know' parallel
+    # We can nudge about partner form and get to know a new register simultaneously
+    parallel_tasks = []
+    
+    # TASK: multi partner - check if all partners are registered and remind about missing ones
+    partner_status = status_data.get('partner_status', {})
+    missing_partners = partner_status.get('missing_partners', [])
+    
+    if missing_partners:
+        # User has multiple partners and some are missing
+        if language == 'he':
+            if len(missing_partners) == 1:
+                parallel_tasks.append(f"👥 רוצה שאשלח ל{missing_partners[0]} תזכורת להשלים את הטופס?")
+            else:
+                missing_names = ', '.join(missing_partners)
+                parallel_tasks.append(f"👥 רוצה שאשלח תזכורת ל{missing_names} להשלים את הטופס?")
+        else:
+            if len(missing_partners) == 1:
+                parallel_tasks.append(f"👥 Would you like me to send a reminder to {missing_partners[0]} to complete the form?")
+            else:
+                missing_names = ', '.join(missing_partners)
+                parallel_tasks.append(f"👥 Would you like me to send reminders to {missing_names} to complete the form?")
+    
+    # Check for get-to-know tasks (for non-returning participants)
+    if not status_data.get('get_to_know') and not status_data.get('is_returning_participant'):
+        # User needs to complete get-to-know section
+        if language == 'he':
+            parallel_tasks.append("💬 אתה יכול להשלים את חלק ההיכרות. זה עוזר לנו ליצור סביבה בטוחה ונוחה לכולם.")
+        else:
+            parallel_tasks.append("💬 You can complete the get-to-know section. This helps us create a safe and comfortable environment for everyone.")
+    
+    # Send parallel tasks if any exist
+    if parallel_tasks:
+        if language == 'he':
+            intro_message = "הצעדים הבאים שלך:"
+        else:
+            intro_message = "Your next steps:"
+        
+        await update.message.reply_text(intro_message)
+        
+        for task in parallel_tasks:
+            await update.message.reply_text(task)
+    
+    # Handle sequential steps (can't be done in parallel)
+    elif not status_data.get('approved'):
+        # User is waiting for approval
+        if language == 'he':
+            message = "⏳ כל הטפסים שלך הושלמו! הבקשה שלך ממתינה לאישור מהמארגנים. נעדכן אותך ברגע שנקבל החלטה."
+        else:
+            message = "⏳ All your forms are complete! Your application is now waiting for organizer approval. We'll update you as soon as we have a decision."
+        await update.message.reply_text(message)
+        
+    elif not status_data.get('paid'):
+        # User is approved but needs to pay
+        if language == 'he':
+            message = "🎉 בקשתך אושרה! הצעד הבא הוא לבצע תשלום כדי לאשר את מקומך באירוע."
+        else:
+            message = "🎉 Your application has been approved! The next step is to complete payment to confirm your spot at the event."
+        await update.message.reply_text(message)
+        
+    elif not status_data.get('group_open'):
+        # User is fully registered, waiting for group to open
+        if language == 'he':
+            message = "✅ הרשמתך הושלמה! קבוצת האירוע תיפתח שבוע לפני האירוע. נעדכן אותך ברגע שהקבוצה תהיה מוכנה."
+        else:
+            message = "✅ Your registration is complete! The event group will open one week before the event. We'll let you know as soon as the group is ready."
+        await update.message.reply_text(message)
+        
+    else:
+        # User is fully registered and group is open
+        if language == 'he':
+            message = "🎊 מעולה! הרשמתך הושלמה וקבוצת האירוע פתוחה. אתה מוכן לאירוע!"
+        else:
+            message = "🎊 Perfect! Your registration is complete and the event group is open. You're all set for the event!"
+        await update.message.reply_text(message)
+        
+    # Always offer to check status or get help
+    if language == 'he':
+        help_message = "💡 תוכל לבדוק את הסטטוס שלך בכל זמן עם /status או לקבל עזרה עם /help"
+    else:
+        help_message = "💡 You can check your status anytime with /status or get help with /help"
+    await update.message.reply_text(help_message)
+
+# --- /cancel command handler ---
+async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user cancellation with reason and timing"""
+    user_id = str(update.effective_user.id)
+    
+    # Get the submission ID for this user
+    submission_id = user_submissions.get(user_id)
+    
+    # Get status data from Google Sheets
+    status_data = None
+    if submission_id:
+        status_data = get_status_data(submission_id=submission_id)
+    
+    if not status_data:
+        # Try to find by Telegram User ID in the sheet
+        status_data = get_status_data(telegram_user_id=user_id)
+    
+    if not status_data:
+        # Use Telegram user's language if available, otherwise default to English
+        user_language = 'he' if update.effective_user.language_code == 'he' else 'en'
+        await update.message.reply_text(
+            get_message(user_language, 'no_submission_linked')
+        )
+        return
+    
+    language = status_data.get('language', 'en')
+    
+    # Check if user provided a reason
+    reason = " ".join(context.args) if context.args else ""
+    
+    if not reason:
+        # Ask for cancellation reason
+        if language == 'he':
+            message = "אנא ספק סיבה לביטול (לדוגמה: /cancel מחלה פתאומית)"
+        else:
+            message = "Please provide a reason for cancellation (e.g., /cancel sudden illness)"
+        await update.message.reply_text(message)
+        return
+    
+    # TASK: cancellation - mark cancellation with reason and timing
+    # Check if this is a last minute cancellation (you would need event date from somewhere)
+    # For now, assume it's last minute if payment was completed (event is soon)
+    is_last_minute = status_data.get('paid', False)
+    
+    # Update cancellation status
+    success = update_cancellation_status(
+        submission_id=status_data['submission_id'],
+        cancelled=True,
+        reason=reason,
+        is_last_minute=is_last_minute
+    )
+    
+    if success:
+        if language == 'he':
+            message = f"הרשמתך בוטלה.\n\nסיבה: {reason}"
+            if is_last_minute:
+                message += "\n\n⚠️ שים לב: זהו ביטול ברגע האחרון וזה יילקח בחשבון בבקשות עתידיות."
+        else:
+            message = f"Your registration has been cancelled.\n\nReason: {reason}"
+            if is_last_minute:
+                message += "\n\n⚠️ Note: This is a last-minute cancellation and will be taken into account for future applications."
+        
+        await update.message.reply_text(message)
+    else:
+        if language == 'he':
+            message = "❌ שגיאה בביטול הרשמה. אנא פנה לתמיכה."
+        else:
+            message = "❌ Error cancelling registration. Please contact support."
+        await update.message.reply_text(message)
+
 # --- Main runner ---
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -502,6 +1102,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("cancel", cancel_registration))
 
     print("Bot is running with polling...")
     try:
