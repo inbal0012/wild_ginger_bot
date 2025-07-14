@@ -14,6 +14,115 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 
+# --- Multilingual Messages ---
+MESSAGES = {
+    'en': {
+        'welcome': "Hi {name}! 👋\nI'm your registration assistant. You can check your status anytime with /status.",
+        'welcome_no_name': "Hi there! 👋\nI'm your registration assistant.\n\nTo link your form submission, please use the link provided after filling out the registration form.\nYou can check your status anytime with /status.",
+        'submission_not_found': "❌ Could not find submission {submission_id}.\nPlease check your submission ID and try again.",
+        'no_submission_linked': "❌ No submission linked to your account.\n\nTo link your form submission, please use the link provided after filling out the registration form.\nIt should look like: `/start SUBM_12345`",
+        'status_labels': {
+            'form': "📋 Form",
+            'partner': "🤝 Partner",
+            'get_to_know': "💬 Get-to-know",
+            'status': "🛠️ Status",
+            'payment': "💸 Payment",
+            'group': "👥 Group",
+            'approved': "✅ Approved",
+            'waiting_review': "⏳ Waiting for review",
+            'paid': "✅",
+            'not_paid': "❌ Not yet paid",
+            'group_open': "✅ Open",
+            'group_not_open': "❌ Not open yet"
+        },
+        'help': "🤖 Wild Ginger Bot Help\n\n"
+                "Available commands:\n"
+                "/start - Link your registration or welcome message\n"
+                "/status - Check your registration progress\n"
+                "/help - Show this help message\n\n"
+                "To link your registration, use the link provided after filling out the form.\n"
+                "Example: /start SUBM_12345"
+    },
+    'he': {
+        'welcome': "שלום {name}! 👋\nאני עוזר הרשמה שלך. אתה יכול לבדוק את הסטטוס שלך בכל זמן עם /status.",
+        'welcome_no_name': "שלום! 👋\nאני עוזר הרשמה שלך.\n\nכדי לקשר את הטופס שלך, אנא השתמש בקישור שניתן לאחר מילוי טופס הרשמה.\nאתה יכול לבדוק את הסטטוס שלך בכל זמן עם /status.",
+        'submission_not_found': "❌ לא הצלחתי למצוא הגשה {submission_id}.\nאנא בדוק את מזהה ההגשה ונסה שוב.",
+        'no_submission_linked': "❌ אין הגשה מקושרת לחשבון שלך.\n\nכדי לקשר את הטופס שלך, אנא השתמש בקישור שניתן לאחר מילוי טופס הרשמה.\nזה צריך להראות כך: `/start SUBM_12345`",
+        'status_labels': {
+            'form': "📋 טופס",
+            'partner': "🤝 שותף",
+            'get_to_know': "💬 היכרות",
+            'status': "🛠️ סטטוס",
+            'payment': "💸 תשלום",
+            'group': "👥 קבוצה",
+            'approved': "✅ מאושר",
+            'waiting_review': "⏳ מחכה לאישור",
+            'paid': "✅",
+            'not_paid': "❌ עדיין לא שולם",
+            'group_open': "✅ פתוחה",
+            'group_not_open': "❌ עדיין לא פתוחה"
+        },
+        'help': "🤖 עזרה לבוט Wild Ginger\n\n"
+                "פקודות זמינות:\n"
+                "/start - קישור הרשמה או הודעת ברוך הבא\n"
+                "/status - בדיקת התקדמות הרשמה\n"
+                "/help - הצגת הודעת עזרה זו\n\n"
+                "כדי לקשר את הרשמתך, השתמש בקישור שניתן לאחר מילוי הטופס.\n"
+                "דוגמה: /start SUBM_12345"
+    }
+}
+
+def get_message(language, key, **kwargs):
+    """Get a message in the specified language with optional formatting"""
+    try:
+        message = MESSAGES[language][key]
+        if kwargs:
+            return message.format(**kwargs)
+        return message
+    except KeyError:
+        # Fallback to English if key not found
+        try:
+            message = MESSAGES['en'][key]
+            if kwargs:
+                return message.format(**kwargs)
+            return message
+        except KeyError:
+            return f"Message key '{key}' not found"
+
+def get_status_message(status_data):
+    """Build a status message in the user's preferred language"""
+    language = status_data.get('language', 'en')
+    labels = MESSAGES[language]['status_labels']
+    
+    # Build partner text
+    partner_text = "❌"
+    if status_data['partner']:
+        if status_data['partner_alias']:
+            partner_text = f"✅ ({status_data['partner_alias']})"
+        else:
+            partner_text = "✅"
+    
+    # Build status text
+    status_text = labels['approved'] if status_data['approved'] else labels['waiting_review']
+    
+    # Build payment text
+    payment_text = labels['paid'] if status_data['paid'] else labels['not_paid']
+    
+    # Build group text
+    group_text = labels['group_open'] if status_data['group_open'] else labels['group_not_open']
+    
+    # Construct the message
+    message = (
+        f"{labels['form']}: {'✅' if status_data['form'] else '❌'}\n"
+        f"{labels['partner']}: {partner_text}\n"
+        f"{labels['get_to_know']}: {'✅' if status_data['get_to_know'] else '❌'}\n"
+        f"{labels['status']}: {status_text}\n"
+        f"{labels['payment']}: {payment_text}\n"
+        f"{labels['group']}: {group_text}\n\n"
+    )
+    
+    return message
+
 # --- Bot token from environment variable ---
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
@@ -77,6 +186,9 @@ def get_column_indices(headers):
             column_indices['coming_alone_or_balance'] = i
         elif 'שם הפרטנר' in header:  # Partner name in Hebrew
             column_indices['partner_name'] = i
+        # Language preference column
+        elif 'האם תרצו להמשיך בעברית או באנגלית' in header or 'Language Preference' in header:
+            column_indices['language_preference'] = i
         # New dedicated status columns
         elif 'Form Complete' in header or 'טופס הושלם' in header:
             column_indices['form_complete'] = i
@@ -210,11 +322,40 @@ def parse_submission_row(row, column_indices):
             return False
         return default
     
+    def get_language_preference(response):
+        """Determine language preference from form response"""
+        if not response:
+            return 'en'  # Default to English if no response
+        
+        response_lower = response.lower().strip()
+        
+        # Check for Hebrew indicators
+        hebrew_indicators = ['עברית', 'hebrew', 'he', 'heb', 'עב']
+        english_indicators = ['english', 'אנגלית', 'en', 'eng', 'אנג']
+        
+        for indicator in hebrew_indicators:
+            if indicator in response_lower:
+                return 'he'
+        
+        for indicator in english_indicators:
+            if indicator in response_lower:
+                return 'en'
+        
+        # Default to Hebrew if contains Hebrew characters
+        if any('\u0590' <= char <= '\u05FF' for char in response):
+            return 'he'
+        
+        return 'en'  # Default to English
+    
     # Get basic info
     submission_id = get_cell_value('submission_id')
     full_name = get_cell_value('full_name')
     coming_alone_or_balance = get_cell_value('coming_alone_or_balance')
     partner_name = get_cell_value('partner_name')
+    language_response = get_cell_value('language_preference')
+    
+    # Determine language preference
+    preferred_language = get_language_preference(language_response)
     
     # Determine if they have a partner
     has_partner = coming_alone_or_balance != 'לבד' and partner_name  # 'לבד' means 'alone' in Hebrew
@@ -239,7 +380,8 @@ def parse_submission_row(row, column_indices):
         "partner_alias": partner_name if has_partner else None,
         "coming_alone_or_balance": coming_alone_or_balance,
         "raw_status": get_cell_value('status', ''),  # Keep as fallback/reference
-        "telegram_user_id": get_cell_value('telegram_user_id', '')
+        "telegram_user_id": get_cell_value('telegram_user_id', ''),
+        "language": preferred_language  # Add language preference
     }
 
 # --- Get status data (Google Sheets or mock) ---
@@ -282,21 +424,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_telegram_user_id(submission_id, user_id)
             
             await update.message.reply_text(
-                f"Hi {status_data['alias']}! 👋\n"
-                f"I'm your registration assistant. You can check your status anytime with /status."
+                get_message(status_data['language'], 'welcome', name=status_data['alias'])
             )
         else:
+            # Default to English if no submission found
             await update.message.reply_text(
-                f"❌ Could not find submission {submission_id}.\n"
-                f"Please check your submission ID and try again."
+                get_message('en', 'submission_not_found', submission_id=submission_id)
             )
     else:
         # No submission ID provided
+        # Use Telegram user's language if available, otherwise default to English
+        user_language = 'he' if user.language_code == 'he' else 'en'
         await update.message.reply_text(
-            f"Hi {user.first_name or 'there'}! 👋\n"
-            f"I'm your registration assistant.\n\n"
-            f"To link your form submission, please use the link provided after filling out the registration form.\n"
-            f"You can check your status anytime with /status."
+            get_message(user_language, 'welcome_no_name')
         )
 
 # --- /status command handler ---
@@ -316,36 +456,44 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_data = get_status_data(telegram_user_id=user_id)
     
     if not status_data:
+        # Use Telegram user's language if available, otherwise default to English
+        user_language = 'he' if update.effective_user.language_code == 'he' else 'en'
         await update.message.reply_text(
-            f"❌ No submission linked to your account.\n\n"
-            f"To link your form submission, please use the link provided after filling out the registration form.\n"
-            f"It should look like: `/start SUBM_12345`"
+            get_message(user_language, 'no_submission_linked')
         )
         return
     
     # Build the status message
-    partner_text = "❌"
-    if status_data['partner']:
-        if status_data['partner_alias']:
-            partner_text = f"✅ ({status_data['partner_alias']})"
-        else:
-            partner_text = "✅"
-    
-    message = (
-        f"📋 Form: {'✅' if status_data['form'] else '❌'}\n"
-        f"🤝 Partner: {partner_text}\n"
-        f"💬 Get-to-know: {'✅' if status_data['get_to_know'] else '❌'}\n"
-        f"🛠️ Status: {'✅ Approved' if status_data['approved'] else '⏳ Waiting for review'}\n"
-        f"💸 Payment: {'✅' if status_data['paid'] else '❌ Not yet paid'}\n"
-        f"👥 Group: {'✅ Open' if status_data['group_open'] else '❌ Not open yet'}\n\n"
-        # f"🆔 Submission ID: `{status_data['submission_id']}`"
-    )
-    
-    # Add additional info if available from Google Sheets
-    # if 'coming_alone_or_balance' in status_data:
-    #     message += f"\n👤 Registration: {status_data['coming_alone_or_balance']}"
+    message = get_status_message(status_data)
     
     await update.message.reply_text(message)
+
+# --- /help command handler ---
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_id = str(user.id)
+    
+    # Try to get user's language from their submission data first
+    submission_id = user_submissions.get(user_id)
+    status_data = None
+    
+    if submission_id:
+        status_data = get_status_data(submission_id=submission_id)
+    
+    if not status_data:
+        # Try to find by Telegram User ID in the sheet
+        status_data = get_status_data(telegram_user_id=user_id)
+    
+    # Determine language
+    if status_data and 'language' in status_data:
+        language = status_data['language']
+    else:
+        # Fallback to Telegram user's language
+        language = 'he' if user.language_code == 'he' else 'en'
+    
+    await update.message.reply_text(
+        get_message(language, 'help')
+    )
 
 # --- Main runner ---
 if __name__ == '__main__':
@@ -353,6 +501,7 @@ if __name__ == '__main__':
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("help", help_command))
 
     print("Bot is running with polling...")
     try:
