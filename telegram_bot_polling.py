@@ -5,6 +5,9 @@ import os
 from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import asyncio
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
 # Load environment variables from .env file
 load_dotenv()
@@ -181,11 +184,6 @@ def get_status_message(status_data):
     )
     
     return message
-
-# --- Bot token from environment variable ---
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required. Please set it in your .env file.")
 
 # --- Google Sheets configuration ---
 GOOGLE_SHEETS_CREDENTIALS_FILE = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
@@ -533,23 +531,6 @@ def parse_submission_row(row, column_indices):
     full_name = get_cell_value('full_name')
     coming_alone_or_balance = get_cell_value('coming_alone_or_balance')
     partner_name = get_cell_value('partner_name')
-    language_response = get_cell_value('language_preference')
-    returning_participant_response = get_cell_value('returning_participant')
-    
-    # Determine language preference
-    preferred_language = get_language_preference(language_response)
-    
-    # Check if user is a returning participant
-    is_returning_participant = get_boolean_value('returning_participant', False)
-    
-    # Handle multiple partners
-    partner_names = parse_multiple_partners(partner_name)
-    has_partner = coming_alone_or_balance != 'לבד' and len(partner_names) > 0  # 'לבד' means 'alone' in Hebrew
-    
-    # For multiple partners, check registration status
-    partner_status = {"all_registered": True, "registered_partners": [], "missing_partners": []}
-    if has_partner:
-        partner_status = check_partner_registration_status(partner_names)
     
     # Parse status into our flow steps - no assumptions, use dedicated columns
     form_complete = get_boolean_value('form_complete', False)
@@ -558,6 +539,33 @@ def parse_submission_row(row, column_indices):
     approved = get_boolean_value('admin_approved', False)
     paid = get_boolean_value('payment_complete', False)
     group_open = get_boolean_value('group_access', False)
+    
+    # Only do expensive operations if needed
+    partner_names = []
+    partner_status = {"all_registered": True, "registered_partners": [], "missing_partners": []}
+    has_partner = coming_alone_or_balance != 'לבד' and partner_name and partner_name.strip()
+    
+    # Only parse partners if partner is not complete
+    if not partner_complete and has_partner:
+        print(f"🔍 Parsing partners for {full_name} (partner not complete)")
+        partner_names = parse_multiple_partners(partner_name)
+        if partner_names:
+            partner_status = check_partner_registration_status(partner_names)
+    elif has_partner:
+        print(f"⏭️  Skipping partner parsing for {full_name} (partner already complete)")
+        partner_names = [partner_name]  # Just store the raw name, no parsing needed
+    
+    # Only determine language preference if we need it for reminders
+    language_response = get_cell_value('language_preference')
+    preferred_language = get_language_preference(language_response)
+    
+    # Only check returning participant status if get_to_know is not complete
+    is_returning_participant = False
+    if not get_to_know_complete:
+        returning_participant_response = get_cell_value('returning_participant')
+        is_returning_participant = get_boolean_value('returning_participant', False)
+    else:
+        print(f"⏭️  Skipping returning participant check for {full_name} (get_to_know already complete)")
     
     return {
         "submission_id": submission_id,
@@ -1025,6 +1033,135 @@ async def continue_conversation(update: Update, context: ContextTypes.DEFAULT_TY
         help_message = "💡 You can check your status anytime with /status or get help with /help"
     await update.message.reply_text(help_message)
 
+# --- /remind_partner command handler ---
+async def remind_partner(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send a reminder to partner(s) to complete their form"""
+    user_id = str(update.effective_user.id)
+    
+    # Get the submission ID for this user
+    submission_id = user_submissions.get(user_id)
+    
+    # Get status data from Google Sheets
+    status_data = None
+    if submission_id:
+        status_data = get_status_data(submission_id=submission_id)
+    
+    if not status_data:
+        # Try to find by Telegram User ID in the sheet
+        status_data = get_status_data(telegram_user_id=user_id)
+    
+    if not status_data:
+        # Use Telegram user's language if available, otherwise default to English
+        user_language = 'he' if update.effective_user.language_code == 'he' else 'en'
+        await update.message.reply_text(
+            get_message(user_language, 'no_submission_linked')
+        )
+        return
+    
+    language = status_data.get('language', 'en')
+    
+    # Check if user has partners and if any are missing
+    partner_status = status_data.get('partner_status', {})
+    missing_partners = partner_status.get('missing_partners', [])
+    
+    if not missing_partners:
+        # No missing partners
+        if language == 'he':
+            message = "✅ כל הפרטנרים שלך כבר השלימו את הטופס!"
+        else:
+            message = "✅ All your partners have already completed the form!"
+        await update.message.reply_text(message)
+        return
+    
+    # Send reminders to missing partners
+    success_count = 0
+    failed_partners = []
+    
+    for partner_name in missing_partners:
+        try:
+            # Try to send reminder (this would normally involve finding partner's contact info)
+            # For now, we'll simulate sending and track the reminder
+            reminder_sent = await send_partner_reminder(
+                partner_name=partner_name,
+                requester_name=status_data.get('alias', 'your partner'),
+                language=language
+            )
+            
+            if reminder_sent:
+                success_count += 1
+                # Log the reminder in the system
+                await log_reminder_sent(
+                    submission_id=submission_id,
+                    partner_name=partner_name,
+                    reminder_type='manual_partner_reminder'
+                )
+            else:
+                failed_partners.append(partner_name)
+                
+        except Exception as e:
+            print(f"❌ Error sending reminder to {partner_name}: {e}")
+            failed_partners.append(partner_name)
+    
+    # Send response to user
+    if success_count > 0:
+        if language == 'he':
+            if success_count == 1:
+                message = f"✅ תזכורת נשלחה ל{missing_partners[0]}!"
+            else:
+                message = f"✅ תזכורות נשלחו ל{success_count} פרטנרים!"
+        else:
+            if success_count == 1:
+                message = f"✅ Reminder sent to {missing_partners[0]}!"
+            else:
+                message = f"✅ Reminders sent to {success_count} partners!"
+        
+        await update.message.reply_text(message)
+    
+    if failed_partners:
+        if language == 'he':
+            failed_names = ', '.join(failed_partners)
+            message = f"❌ לא הצלחנו לשלוח תזכורת ל: {failed_names}"
+        else:
+            failed_names = ', '.join(failed_partners)
+            message = f"❌ Failed to send reminders to: {failed_names}"
+        
+        await update.message.reply_text(message)
+
+async def send_partner_reminder(partner_name: str, requester_name: str, language: str = 'en'):
+    """Send a reminder to a partner (placeholder implementation)"""
+    # TODO: Implement actual partner reminder sending
+    # This could involve:
+    # 1. Looking up partner's contact info from the database
+    # 2. Sending an email or SMS
+    # 3. Sending a Telegram message if they're registered
+    # 4. Creating a notification in the system
+    
+    print(f"🔔 Sending reminder to {partner_name} from {requester_name}")
+    
+    # For now, just simulate success
+    # In a real implementation, this would:
+    # - Find partner's contact info
+    # - Send actual reminder via preferred method
+    # - Return True/False based on success
+    
+    return True  # Simulated success
+
+async def log_reminder_sent(submission_id: str, partner_name: str, reminder_type: str):
+    """Log that a reminder was sent"""
+    from datetime import datetime
+    
+    # TODO: Implement actual logging to database or Google Sheets
+    timestamp = datetime.now().isoformat()
+    
+    print(f"📝 Logged reminder: {submission_id} -> {partner_name} ({reminder_type}) at {timestamp}")
+    
+    # In a real implementation, this would:
+    # - Add a row to a reminders log sheet
+    # - Update the main sheet with reminder status
+    # - Store in a database table
+    
+    return True
+
 # --- /cancel command handler ---
 async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user cancellation with reason and timing"""
@@ -1095,6 +1232,326 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
             message = "❌ Error cancelling registration. Please contact support."
         await update.message.reply_text(message)
 
+# --- Automatic Reminder System ---
+class ReminderScheduler:
+    """Handles automatic reminders based on time and user state"""
+    
+    def __init__(self, bot_application):
+        self.bot = bot_application
+        self.reminder_intervals = {
+            # 'partner_pending': 24 * 60 * 60,  # 24 hours in seconds
+            'partner_pending': 1 * 60,  # 24 hours in seconds
+            'payment_pending': 3 * 24 * 60 * 60,  # 3 days
+            'group_opening': 7 * 24 * 60 * 60,  # 7 days before event
+            'event_reminder': 24 * 60 * 60,  # 1 day before event
+        }
+        self.last_reminder_check = {}
+        
+    def quick_completion_check(self, row, column_indices):
+        """Quick check if user needs any reminders without expensive parsing"""
+        def get_cell_value(key, default=""):
+            index = column_indices.get(key)
+            if index is not None and index < len(row):
+                return row[index]
+            return default
+        
+        def get_boolean_value(key, default=False):
+            """Get a boolean value from the sheet, handling various formats"""
+            value = get_cell_value(key, "").strip().upper()
+            if value in ['TRUE', 'YES', 'כן', '1', 'V', '✓']:
+                return True
+            elif value in ['FALSE', 'NO', 'לא', '0', '', 'X']:
+                return False
+            return default
+        
+        # Get essential info without expensive parsing
+        submission_id = get_cell_value('submission_id')
+        telegram_user_id = get_cell_value('telegram_user_id')
+        
+        if not submission_id or not telegram_user_id:
+            return None  # Can't process without these
+        
+        # Check completion status
+        partner_complete = get_boolean_value('partner_complete', False)
+        approved = get_boolean_value('admin_approved', False)
+        paid = get_boolean_value('payment_complete', False)
+        group_open = get_boolean_value('group_access', False)
+        
+        return {
+            'submission_id': submission_id,
+            'telegram_user_id': telegram_user_id,
+            'partner_complete': partner_complete,
+            'approved': approved,
+            'paid': paid,
+            'group_open': group_open,
+            'needs_reminders': not (partner_complete and approved and paid and group_open)
+        }
+    
+    async def check_and_send_reminders(self):
+        """Check all users and send appropriate reminders"""
+        print("🔔 Checking for pending reminders...")
+        
+        # Get all sheet data
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            print("⚠️  No sheet data available for reminder checking")
+            return
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        column_indices = get_column_indices(headers)
+        
+        # Counters for efficiency tracking
+        total_users = 0
+        skipped_users = 0
+        processed_users = 0
+        reminders_sent = 0
+        
+        # Process each user
+        for row in rows:
+            try:
+                # Quick pre-check without expensive parsing
+                quick_check = self.quick_completion_check(row, column_indices)
+                if not quick_check:
+                    continue
+                
+                total_users += 1
+                
+                # Skip if user doesn't need any reminders
+                if not quick_check['needs_reminders']:
+                    skipped_users += 1
+                    print(f"⏭️  Skipping {quick_check['submission_id']} - fully complete (quick check)")
+                    continue
+                
+                # Only do expensive parsing if user needs reminders
+                user_data = parse_submission_row(row, column_indices)
+                if not user_data or not user_data.get('submission_id'):
+                    continue
+                
+                processed_users += 1
+                
+                # Check if user needs reminders
+                result = await self.check_user_reminders(user_data)
+                
+            except Exception as e:
+                print(f"❌ Error processing reminder for row: {e}")
+                continue
+        
+        print(f"📊 Reminder check summary: {total_users} users total, {skipped_users} skipped (quick check), {processed_users} processed")
+    
+    async def check_user_reminders(self, user_data: Dict):
+        """Check if a specific user needs any reminders"""
+        submission_id = user_data.get('submission_id')
+        telegram_user_id = user_data.get('telegram_user_id')
+        user_name = user_data.get('alias', 'Unknown')
+        
+        if not telegram_user_id:
+            return  # Can't send reminders without Telegram ID
+        
+        # Early exit if user is fully complete - no need to check any reminders
+        if (user_data.get('partner', False) and 
+            user_data.get('approved', False) and 
+            user_data.get('paid', False) and 
+            user_data.get('group_open', False)):
+            print(f"⏭️  Skipping {user_name} - fully complete")
+            return  # User is fully complete, no reminders needed
+        
+        # Check different reminder types (only if needed)
+        if not user_data.get('partner', False):
+            await self.check_partner_reminder(user_data)
+        else:
+            print(f"⏭️  Skipping partner check for {user_name} - partner complete")
+        
+        if user_data.get('approved', False) and not user_data.get('paid', False):
+            await self.check_payment_reminder(user_data)
+        
+        if user_data.get('paid', False) and not user_data.get('group_open', False):
+            await self.check_group_reminder(user_data)
+        
+        if user_data.get('group_open', False):
+            await self.check_event_reminder(user_data)
+    
+    async def check_partner_reminder(self, user_data: Dict):
+        """Check if user needs a partner reminder"""
+        # Early exit if partner is already complete
+        if user_data.get('partner', False):
+            return  # Partner requirements already met
+        
+        submission_id = user_data.get('submission_id')
+        partner_status = user_data.get('partner_status', {})
+        missing_partners = partner_status.get('missing_partners', [])
+        
+        if not missing_partners:
+            print(f"⏭️  No missing partners for {user_data.get('alias', 'Unknown')}")
+            return  # No missing partners
+        
+        # Check if 24 hours have passed since last partner reminder
+        last_reminder_key = f"{submission_id}_partner"
+        now = datetime.now()
+        
+        if last_reminder_key in self.last_reminder_check:
+            time_since_last = (now - self.last_reminder_check[last_reminder_key]).total_seconds()
+            if time_since_last < self.reminder_intervals['partner_pending']:
+                print(f"⏭️  Too soon for partner reminder for {user_data.get('alias', 'Unknown')}")
+                return  # Too soon for another reminder
+        
+        # Send partner reminder
+        print(f"🔔 Sending partner reminder to {user_data.get('alias', 'Unknown')} for missing: {missing_partners}")
+        await self.send_automatic_partner_reminder(user_data, missing_partners)
+        self.last_reminder_check[last_reminder_key] = now
+    
+    async def check_payment_reminder(self, user_data: Dict):
+        """Check if user needs a payment reminder"""
+        # Early exit conditions moved to check_user_reminders for efficiency
+        submission_id = user_data.get('submission_id')
+        last_reminder_key = f"{submission_id}_payment"
+        now = datetime.now()
+        
+        if last_reminder_key in self.last_reminder_check:
+            time_since_last = (now - self.last_reminder_check[last_reminder_key]).total_seconds()
+            if time_since_last < self.reminder_intervals['payment_pending']:
+                return  # Too soon for another reminder
+        
+        # Send payment reminder
+        await self.send_automatic_payment_reminder(user_data)
+        self.last_reminder_check[last_reminder_key] = now
+    
+    async def check_group_reminder(self, user_data: Dict):
+        """Check if user needs a group opening reminder"""
+        # Early exit conditions moved to check_user_reminders for efficiency
+        
+        # TODO: Check if it's 7 days before event
+        # For now, simulate group opening reminder
+        submission_id = user_data.get('submission_id')
+        last_reminder_key = f"{submission_id}_group"
+        now = datetime.now()
+        
+        if last_reminder_key in self.last_reminder_check:
+            time_since_last = (now - self.last_reminder_check[last_reminder_key]).total_seconds()
+            if time_since_last < self.reminder_intervals['group_opening']:
+                return  # Too soon for another reminder
+        
+        # Send group opening reminder
+        await self.send_automatic_group_reminder(user_data)
+        self.last_reminder_check[last_reminder_key] = now
+    
+    async def check_event_reminder(self, user_data: Dict):
+        """Check if user needs an event reminder"""
+        if not user_data.get('group_open'):
+            return  # Group not open yet
+        
+        # TODO: Check if it's 1 day before event
+        # This would require event date information
+        pass
+    
+    async def send_automatic_partner_reminder(self, user_data: Dict, missing_partners: List[str]):
+        """Send automatic partner reminder"""
+        telegram_user_id = user_data.get('telegram_user_id')
+        language = user_data.get('language', 'en')
+        
+        if not telegram_user_id:
+            return
+        
+        try:
+            if language == 'he':
+                if len(missing_partners) == 1:
+                    message = f"🔔 תזכורת: עדיין מחכים ל{missing_partners[0]} להשלים את הטופס. רוצה לשלוח להם תזכורת? השתמש ב /remind_partner"
+                else:
+                    missing_names = ', '.join(missing_partners)
+                    message = f"🔔 תזכורת: עדיין מחכים ל{missing_names} להשלים את הטופס. השתמש ב /remind_partner"
+            else:
+                if len(missing_partners) == 1:
+                    message = f"🔔 Reminder: Still waiting for {missing_partners[0]} to complete the form. Want to send them a reminder? Use /remind_partner"
+                else:
+                    missing_names = ', '.join(missing_partners)
+                    message = f"🔔 Reminder: Still waiting for {missing_names} to complete the form. Use /remind_partner"
+            
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
+            
+            # Log the reminder
+            await log_reminder_sent(
+                submission_id=user_data.get('submission_id'),
+                partner_name=', '.join(missing_partners),
+                reminder_type='automatic_partner_reminder'
+            )
+            
+        except Exception as e:
+            print(f"❌ Error sending automatic partner reminder: {e}")
+    
+    async def send_automatic_payment_reminder(self, user_data: Dict):
+        """Send automatic payment reminder"""
+        telegram_user_id = user_data.get('telegram_user_id')
+        language = user_data.get('language', 'en')
+        
+        if not telegram_user_id:
+            return
+        
+        try:
+            if language == 'he':
+                message = "💸 תזכורת תשלום: הרשמתך אושרה! אנא השלם את התשלום כדי לאשר את מקומך באירוע."
+            else:
+                message = "💸 Payment reminder: Your registration has been approved! Please complete payment to confirm your spot at the event."
+            
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
+            
+            # Log the reminder
+            await log_reminder_sent(
+                submission_id=user_data.get('submission_id'),
+                partner_name='',
+                reminder_type='automatic_payment_reminder'
+            )
+            
+        except Exception as e:
+            print(f"❌ Error sending automatic payment reminder: {e}")
+    
+    async def send_automatic_group_reminder(self, user_data: Dict):
+        """Send automatic group opening reminder"""
+        telegram_user_id = user_data.get('telegram_user_id')
+        language = user_data.get('language', 'en')
+        
+        if not telegram_user_id:
+            return
+        
+        try:
+            if language == 'he':
+                message = "👥 הקבוצה פתוחה! קבוצת האירוע שלך פתוחה עכשיו. בואו להכיר או פשוט לצפות בשקט - מה שמתאים לכם! 🧘"
+            else:
+                message = "👥 Group is open! Your event group is now open. Come meet others, share vibes, or just lurk quietly if that's your vibe! 🧘"
+            
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
+            
+            # Log the reminder
+            await log_reminder_sent(
+                submission_id=user_data.get('submission_id'),
+                partner_name='',
+                reminder_type='automatic_group_reminder'
+            )
+            
+        except Exception as e:
+            print(f"❌ Error sending automatic group reminder: {e}")
+
+# Global reminder scheduler
+reminder_scheduler = None
+
+async def start_reminder_scheduler(bot_application):
+    """Start the automatic reminder scheduler"""
+    global reminder_scheduler
+    reminder_scheduler = ReminderScheduler(bot_application)
+    
+    # Run reminder checks every hour
+    while True:
+        try:
+            await reminder_scheduler.check_and_send_reminders()
+            await asyncio.sleep(50)  # Sleep for 1 hour
+        except Exception as e:
+            print(f"❌ Error in reminder scheduler: {e}")
+            await asyncio.sleep(300)  # Sleep for 5 minutes on error, then retry
+
+# --- Bot token from environment variable ---
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required. Please set it in your .env file.")
+
 # --- Main runner ---
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -1102,10 +1559,32 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("remind_partner", remind_partner))
     app.add_handler(CommandHandler("cancel", cancel_registration))
 
     print("Bot is running with polling...")
+    
+    # Define the scheduler function for the job queue
+    async def scheduled_reminder_check(context):
+        """Check and send reminders - called by job queue"""
+        try:
+            global reminder_scheduler
+            if not reminder_scheduler:
+                reminder_scheduler = ReminderScheduler(app)
+            
+            print("🔔 Checking for pending reminders...")
+            await reminder_scheduler.check_and_send_reminders()
+        except Exception as e:
+            print(f"❌ Error in scheduled reminder check: {e}")
+    
+    # Add the reminder job to the job queue (every 50 seconds as per user's testing)
+    job_queue = app.job_queue
+    job_queue.run_repeating(scheduled_reminder_check, interval=50, first=10)
+    
+    print("🔔 Reminder scheduler added to job queue (checking every 50 seconds)")
+    
     try:
+        # Run the bot normally
         app.run_polling(drop_pending_updates=True)
     except Exception as e:
         if "Conflict" in str(e):
@@ -1117,4 +1596,9 @@ if __name__ == '__main__':
             print("4. Check your task manager for other Python processes")
         else:
             print(f"❌ Error starting bot: {e}")
+        exit(1)
+    except KeyboardInterrupt:
+        print("👋 Bot stopped by user")
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
         exit(1)

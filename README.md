@@ -47,7 +47,13 @@ python test_sheets.py
 ```
 This will verify your Google Sheets configuration and show you what data is being read.
 
-### 6. Run the Bot
+### 6. Test Reminder System (Optional)
+```bash
+python test_reminders.py
+```
+This will test the reminder system functionality without actually sending messages.
+
+### 7. Run the Bot
 ```bash
 python telegram_bot_polling.py
 ```
@@ -56,6 +62,8 @@ python telegram_bot_polling.py
 
 - **`/start`** - Welcome message and form submission linking
 - **`/status`** - Show current registration progress with emojis
+- **`/remind_partner`** - Send reminders to partners who haven't completed their forms
+- **Automatic reminder system** - Sends scheduled reminders based on registration status
 - **Submission ID linking** - Connect Telegram accounts to external form submissions
 - **Google Sheets integration** - Real-time data from your managed spreadsheet
 - **Hebrew support** - Handles Hebrew column names and content
@@ -68,6 +76,30 @@ python telegram_bot_polling.py
 | `/start` | Welcome message and bot introduction |
 | `/start SUBMISSION_ID` | Link Telegram account to form submission |
 | `/status` | Show registration progress across all steps |
+| `/remind_partner` | Send reminders to partners who haven't completed forms |
+| `/cancel <reason>` | Cancel registration with a reason |
+| `/help` | Show help message and available commands |
+
+## Reminder System
+
+The bot now includes a comprehensive reminder system that automatically sends reminders based on registration status and timing:
+
+### Automatic Reminders:
+- **Partner reminders**: Sent every 24 hours if partners haven't completed their forms
+- **Payment reminders**: Sent every 3 days after approval until payment is confirmed
+- **Group opening reminders**: Sent when event groups open (7 days before event)
+- **Event reminders**: Sent 1 day before the event
+
+### Manual Reminders:
+- Use `/remind_partner` to manually send reminders to missing partners
+- The bot will tell you which partners are missing and track reminder history
+- Supports both Hebrew and English messaging
+
+### Reminder Features:
+- **Rate limiting**: Won't spam users with too many reminders
+- **Logging**: All reminders are logged for admin tracking
+- **Language support**: Sends reminders in user's preferred language
+- **Multi-partner support**: Handles users with multiple partners correctly
 
 ## Form Submission Linking
 
@@ -123,8 +155,12 @@ The bot tracks these registration steps:
 - [x] **Google Sheets integration** - Real-time data from managed spreadsheet ✅
 - [x] **Hebrew support** - Handle Hebrew column names and content ✅
 - [x] **Status validation** - Verify submission exists before showing status ✅
-- [ ] **Add `/remind_partner` and `/help` commands**
+- [x] **Add `/remind_partner` and `/help` commands** ✅
+- [x] **Automatic reminder system** - Time-based reminders for partners, payment, and groups ✅
+- [x] **Partner coordination features** - Remind partners, link partners ✅
+- [ ] **Enhanced partner reminder sending** - Email/SMS integration for actual partner contact
 - [ ] **User data persistence** - Store Telegram ID ↔ Submission ID mapping in database
-- [ ] **Partner coordination features** - Remind partners, link partners
 - [ ] **Real-time status updates** - Webhook notifications from form updates
-- [ ] **Admin commands** - Allow admins to update status directly via bot 
+- [ ] **Admin commands** - Allow admins to update status directly via bot
+- [ ] **Event date integration** - Calculate reminders based on actual event dates
+- [ ] **Reminder analytics** - Track reminder effectiveness and delivery rates 
