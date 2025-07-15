@@ -159,25 +159,30 @@ def build_partner_status_text(status_data, language):
 def get_status_message(status_data):
     """Build a status message in the user's preferred language"""
     language = status_data.get('language', 'en')
+    
+    # Handle invalid language codes gracefully
+    if language not in MESSAGES:
+        language = 'en'
+    
     labels = MESSAGES[language]['status_labels']
     
     # Build detailed partner text
     partner_text = build_partner_status_text(status_data, language)
     
-    # Build status text
-    status_text = labels['approved'] if status_data['approved'] else labels['waiting_review']
+    # Build status text (with safe defaults for malformed data)
+    status_text = labels['approved'] if status_data.get('approved', False) else labels['waiting_review']
     
     # Build payment text
-    payment_text = labels['paid'] if status_data['paid'] else labels['not_paid']
+    payment_text = labels['paid'] if status_data.get('paid', False) else labels['not_paid']
     
     # Build group text
-    group_text = labels['group_open'] if status_data['group_open'] else labels['group_not_open']
+    group_text = labels['group_open'] if status_data.get('group_open', False) else labels['group_not_open']
     
-    # Construct the message
+    # Construct the message (with safe defaults for malformed data)
     message = (
-        f"{labels['form']}: {'✅' if status_data['form'] else '❌'}\n"
+        f"{labels['form']}: {'✅' if status_data.get('form', False) else '❌'}\n"
         f"{partner_text}\n"
-        f"{labels['get_to_know']}: {'✅' if status_data['get_to_know'] else '❌'}\n"
+        f"{labels['get_to_know']}: {'✅' if status_data.get('get_to_know', False) else '❌'}\n"
         f"{labels['status']}: {status_text}\n"
         f"{labels['payment']}: {payment_text}\n"
         f"{labels['group']}: {group_text}\n\n"

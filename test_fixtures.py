@@ -300,7 +300,7 @@ class TestScenarios:
         'expected_messages': [
             'Hi David Rodriguez!',
             'Carlos Santos, Ana Lopez',
-            "haven't completed the form yet"
+            "hasn't completed the form yet"
         ]
     }
     
@@ -359,15 +359,20 @@ class MockGoogleSheetsService:
         self.mock_data = mock_data or MockData.get_sheet_data()
         self.updated_cells = {}
         
-    def get_values(self, spreadsheet_id, range_name):
+        # Create proper Google Sheets API mock structure
+        # service.spreadsheets().values().get() / .update()
+        self.spreadsheets = Mock()
+        self.spreadsheets.return_value.values.return_value = self
+        
+    def get(self, spreadsheetId, range):
         """Mock getting values from sheet"""
         result = Mock()
-        result.get.return_value = self.mock_data['rows']
+        result.execute.return_value = {'values': [self.mock_data['headers']] + self.mock_data['rows']}
         return result
     
-    def update_values(self, spreadsheet_id, range_name, value_input_option, body):
+    def update(self, spreadsheetId, range, valueInputOption, body):
         """Mock updating values in sheet"""
-        self.updated_cells[range_name] = body['values'][0][0]
+        self.updated_cells[range] = body['values'][0][0]
         result = Mock()
         result.execute.return_value = {'updatedCells': 1}
         return result

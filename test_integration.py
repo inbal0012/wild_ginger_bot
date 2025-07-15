@@ -111,7 +111,7 @@ class TestEndToEndFlows:
             
             status_message = update.message.reply_text.call_args[0][0]
             assert "Carlos Santos, Ana Lopez" in status_message
-            assert "haven't completed the form yet" in status_message
+            assert "hasn't completed the form yet" in status_message
             
             # Test /remind_partner command
             update.message.reply_text.reset_mock()
@@ -161,7 +161,7 @@ class TestEndToEndFlows:
             
             status_message = update.message.reply_text.call_args[0][0]
             assert "טופס: ✅" in status_message
-            assert "פרטנר: ✅" in status_message
+            assert "שותף: ✅" in status_message
             
             # Test /help command
             update.message.reply_text.reset_mock()
