@@ -1239,8 +1239,7 @@ class ReminderScheduler:
     def __init__(self, bot_application):
         self.bot = bot_application
         self.reminder_intervals = {
-            # 'partner_pending': 24 * 60 * 60,  # 24 hours in seconds
-            'partner_pending': 1 * 60,  # 24 hours in seconds
+            'partner_pending': 24 * 60 * 60,  # 24 hours in seconds
             'payment_pending': 3 * 24 * 60 * 60,  # 3 days
             'group_opening': 7 * 24 * 60 * 60,  # 7 days before event
             'event_reminder': 24 * 60 * 60,  # 1 day before event
