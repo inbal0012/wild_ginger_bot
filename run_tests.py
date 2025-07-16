@@ -73,6 +73,11 @@ def main():
             'description': 'Run existing test files'
         },
         {
+            'name': 'Admin Notification Tests',
+            'command': 'python test_admin_notifications.py',
+            'description': 'Test admin notification system and commands'
+        },
+        {
             'name': 'All Tests with Coverage',
             'command': 'python -m pytest test_telegram_bot.py test_integration.py --cov=telegram_bot_polling --cov-report=html --cov-report=term',
             'description': 'All tests with coverage report'

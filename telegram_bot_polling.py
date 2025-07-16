@@ -17,6 +17,26 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 
+# --- Admin Configuration ---
+# Admin user IDs - these are Telegram User IDs of administrators
+ADMIN_USER_IDS = []
+admin_ids_env = os.getenv("ADMIN_USER_IDS", "")
+if admin_ids_env:
+    try:
+        ADMIN_USER_IDS = [int(id.strip()) for id in admin_ids_env.split(",") if id.strip()]
+        print(f"✅ Admin users configured: {len(ADMIN_USER_IDS)} admins")
+    except ValueError:
+        print("❌ Invalid ADMIN_USER_IDS format. Please use comma-separated integers.")
+
+# Admin notification preferences
+ADMIN_NOTIFICATIONS = {
+    'new_registrations': True,
+    'partner_delays': True,
+    'payment_overdue': True,
+    'weekly_digest': True,
+    'status_changes': True
+}
+
 # --- Multilingual Messages ---
 MESSAGES = {
     'en': {
@@ -846,6 +866,155 @@ def get_status_data(submission_id: str = None, telegram_user_id: str = None):
 # Store user -> submission_id mapping (in production, use a database)
 user_submissions = {}
 
+# --- Admin Functions ---
+def is_admin(user_id: int) -> bool:
+    """Check if user is an admin"""
+    return user_id in ADMIN_USER_IDS
+
+async def notify_admins(message: str, notification_type: str = "general"):
+    """Send notification to all admins"""
+    if not ADMIN_USER_IDS:
+        print("⚠️  No admin users configured - skipping admin notification")
+        return
+    
+    if not ADMIN_NOTIFICATIONS.get(notification_type, True):
+        print(f"⚠️  Admin notifications disabled for type: {notification_type}")
+        return
+    
+    from telegram import Bot
+    bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+    
+    for admin_id in ADMIN_USER_IDS:
+        try:
+            await bot.send_message(
+                chat_id=admin_id,
+                text=f"🔔 **Admin Notification**\n\n{message}",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            print(f"❌ Failed to send admin notification to {admin_id}: {e}")
+
+async def notify_registration_ready_for_review(submission_id: str, user_name: str, partner_info: str = ""):
+    """Notify admins when a registration is ready for review"""
+    partner_text = f" (Partner: {partner_info})" if partner_info else ""
+    message = (
+        f"📋 **New Registration Ready for Review**\n\n"
+        f"**User:** {user_name}\n"
+        f"**Submission ID:** {submission_id}{partner_text}\n"
+        f"**Status:** Ready for approval\n\n"
+        f"Please review and approve/reject this registration."
+    )
+    
+    await notify_admins(message, "new_registrations")
+
+async def notify_partner_delay(submission_id: str, user_name: str, missing_partners: list):
+    """Notify admins about partner registration delays"""
+    missing_text = ", ".join(missing_partners)
+    message = (
+        f"⏰ **Partner Registration Delay**\n\n"
+        f"**User:** {user_name}\n"
+        f"**Submission ID:** {submission_id}\n"
+        f"**Missing Partners:** {missing_text}\n\n"
+        f"Partners have been pending for >24 hours. Consider manual follow-up."
+    )
+    
+    await notify_admins(message, "partner_delays")
+
+async def notify_payment_overdue(submission_id: str, user_name: str, days_overdue: int):
+    """Notify admins about overdue payments"""
+    message = (
+        f"💸 **Payment Overdue**\n\n"
+        f"**User:** {user_name}\n"
+        f"**Submission ID:** {submission_id}\n"
+        f"**Days Overdue:** {days_overdue}\n\n"
+        f"Approved registration has not completed payment. Consider follow-up."
+    )
+    
+    await notify_admins(message, "payment_overdue")
+
+async def check_and_notify_ready_for_review(status_data: dict):
+    """Check if a registration is ready for review and notify admins"""
+    if not status_data:
+        return
+    
+    # Check if user is ready for review: form, partner, get-to-know complete but not approved
+    if (status_data.get('form', False) and 
+        status_data.get('partner', False) and 
+        status_data.get('get_to_know', False) and 
+        not status_data.get('approved', False)):
+        
+        # Get partner info for notification
+        partner_info = ""
+        if status_data.get('partner_names'):
+            partner_info = ", ".join(status_data['partner_names'])
+        elif status_data.get('partner_alias'):
+            partner_info = status_data['partner_alias']
+        
+        # Notify admins
+        await notify_registration_ready_for_review(
+            submission_id=status_data.get('submission_id', 'Unknown'),
+            user_name=status_data.get('alias', 'Unknown'),
+            partner_info=partner_info
+        )
+
+def update_admin_approved(submission_id: str, approved: bool = True):
+    """Update the Admin Approved field for a specific submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update Admin Approved")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        admin_approved_col = column_indices.get('admin_approved')
+        
+        if submission_id_col is None or admin_approved_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Calculate the actual row number (adding 2 for header row and 0-based indexing)
+                actual_row = row_index + 2
+                
+                # Convert column index to letter
+                admin_approved_col_letter = column_index_to_letter(admin_approved_col)
+                
+                # Update the cell
+                range_name = f"{admin_approved_col_letter}{actual_row}"
+                
+                body = {
+                    'values': [['TRUE' if approved else 'FALSE']]
+                }
+                
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body=body
+                ).execute()
+                
+                print(f"✅ Admin approval updated for {submission_id}: {approved}")
+                return True
+        
+        print(f"❌ Submission ID {submission_id} not found in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating admin approval: {e}")
+        return False
+
 # --- /start command handler ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -882,6 +1051,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # TASK: chat continues - keep the conversation going after /start
             # Guide user to their next step instead of letting conversation fade
             await continue_conversation(update, context, status_data)
+            
+            # Check if user is now ready for review and notify admins
+            await check_and_notify_ready_for_review(status_data)
         else:
             # Default to English if no submission found
             await update.message.reply_text(
@@ -1237,6 +1409,338 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
             message = "❌ Error cancelling registration. Please contact support."
         await update.message.reply_text(message)
 
+# --- Admin Commands ---
+async def admin_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show admin dashboard with registration statistics"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    if not sheets_service:
+        await update.message.reply_text("❌ Google Sheets not available. Cannot access registration data.")
+        return
+    
+    try:
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            await update.message.reply_text("❌ No registration data found.")
+            return
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        column_indices = get_column_indices(headers)
+        
+        # Calculate statistics
+        stats = {
+            'total': 0,
+            'ready_for_review': 0,
+            'approved': 0,
+            'paid': 0,
+            'partner_pending': 0,
+            'cancelled': 0
+        }
+        
+        pending_approvals = []
+        
+        for row in rows:
+            if len(row) <= column_indices.get('submission_id', 0):
+                continue
+                
+            submission_id = row[column_indices.get('submission_id', 0)]
+            if not submission_id:
+                continue
+                
+            stats['total'] += 1
+            status_data = parse_submission_row(row, column_indices)
+            
+            # Count by status
+            if status_data.get('cancelled', False):
+                stats['cancelled'] += 1
+            elif not status_data.get('partner', False):
+                stats['partner_pending'] += 1
+            elif status_data.get('form', False) and status_data.get('partner', False) and status_data.get('get_to_know', False) and not status_data.get('approved', False):
+                stats['ready_for_review'] += 1
+                pending_approvals.append({
+                    'name': status_data.get('alias', 'Unknown'),
+                    'submission_id': submission_id,
+                    'partner': status_data.get('partner_alias', 'Solo')
+                })
+            elif status_data.get('approved', False) and status_data.get('paid', False):
+                stats['paid'] += 1
+            elif status_data.get('approved', False):
+                stats['approved'] += 1
+        
+        # Create dashboard message
+        message = (
+            f"🔧 **Admin Dashboard**\n\n"
+            f"**Registration Statistics:**\n"
+            f"• Total: {stats['total']}\n"
+            f"• Ready for Review: {stats['ready_for_review']}\n"
+            f"• Approved: {stats['approved']}\n"
+            f"• Paid: {stats['paid']}\n"
+            f"• Partner Pending: {stats['partner_pending']}\n"
+            f"• Cancelled: {stats['cancelled']}\n\n"
+        )
+        
+        if pending_approvals:
+            message += f"**Pending Approvals ({len(pending_approvals)}):**\n"
+            for approval in pending_approvals[:10]:  # Show first 10
+                partner_info = f" + {approval['partner']}" if approval['partner'] != 'Solo' else ""
+                message += f"• {approval['name']}{partner_info} (`{approval['submission_id']}`)\n"
+            
+            if len(pending_approvals) > 10:
+                message += f"• ... and {len(pending_approvals) - 10} more\n"
+        
+        message += f"\n**Available Commands:**\n"
+        message += f"• `/admin_approve SUBM_ID` - Approve registration\n"
+        message += f"• `/admin_reject SUBM_ID` - Reject registration\n"
+        message += f"• `/admin_status SUBM_ID` - Check registration status\n"
+        message += f"• `/admin_digest` - Generate weekly digest\n"
+        
+        await update.message.reply_text(message)
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error generating dashboard: {e}")
+
+async def admin_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Approve a registration (admin only)"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage: `/admin_approve SUBM_12345`")
+        return
+    
+    submission_id = context.args[0]
+    
+    # Update the admin approved status
+    success = update_admin_approved(submission_id, True)
+    
+    if success:
+        # Get user data to send notification
+        status_data = get_status_data(submission_id=submission_id)
+        if status_data and status_data.get('telegram_user_id'):
+            try:
+                user_language = status_data.get('language', 'en')
+                if user_language == 'he':
+                    user_message = f"🎉 הרשמתך אושרה!\n\nמזהה הגשה: {submission_id}\n\nהצעד הבא: השלמת התשלום."
+                else:
+                    user_message = f"🎉 Your registration has been approved!\n\nSubmission ID: {submission_id}\n\nNext step: Complete payment."
+                
+                await context.bot.send_message(
+                    chat_id=status_data['telegram_user_id'],
+                    text=user_message
+                )
+            except Exception as e:
+                print(f"❌ Failed to notify user about approval: {e}")
+        
+        await update.message.reply_text(f"✅ Registration {submission_id} approved successfully!")
+        
+        # Notify other admins
+        admin_name = update.effective_user.first_name or "Admin"
+        await notify_admins(
+            f"✅ Registration approved by {admin_name}\n\n"
+            f"**Submission ID:** {submission_id}\n"
+            f"**User:** {status_data.get('alias', 'Unknown') if status_data else 'Unknown'}",
+            "status_changes"
+        )
+    else:
+        await update.message.reply_text(f"❌ Failed to approve registration {submission_id}. Please check the submission ID.")
+
+async def admin_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reject a registration (admin only)"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage: `/admin_reject SUBM_12345 [reason]`")
+        return
+    
+    submission_id = context.args[0]
+    reason = " ".join(context.args[1:]) if len(context.args) > 1 else "No reason provided"
+    
+    # Update the admin approved status to false
+    success = update_admin_approved(submission_id, False)
+    
+    if success:
+        # Get user data to send notification
+        status_data = get_status_data(submission_id=submission_id)
+        if status_data and status_data.get('telegram_user_id'):
+            try:
+                user_language = status_data.get('language', 'en')
+                if user_language == 'he':
+                    user_message = f"❌ הרשמתך נדחתה\n\nמזהה הגשה: {submission_id}\n\nסיבה: {reason}\n\nאתה מוזמן לנסות שוב באירוע הבא."
+                else:
+                    user_message = f"❌ Your registration has been rejected\n\nSubmission ID: {submission_id}\n\nReason: {reason}\n\nYou're welcome to try again for the next event."
+                
+                await context.bot.send_message(
+                    chat_id=status_data['telegram_user_id'],
+                    text=user_message
+                )
+            except Exception as e:
+                print(f"❌ Failed to notify user about rejection: {e}")
+        
+        await update.message.reply_text(f"✅ Registration {submission_id} rejected successfully!")
+        
+        # Notify other admins
+        admin_name = update.effective_user.first_name or "Admin"
+        await notify_admins(
+            f"❌ Registration rejected by {admin_name}\n\n"
+            f"**Submission ID:** {submission_id}\n"
+            f"**User:** {status_data.get('alias', 'Unknown') if status_data else 'Unknown'}\n"
+            f"**Reason:** {reason}",
+            "status_changes"
+        )
+    else:
+        await update.message.reply_text(f"❌ Failed to reject registration {submission_id}. Please check the submission ID.")
+
+async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check detailed status of a registration (admin only)"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage: `/admin_status SUBM_12345`")
+        return
+    
+    submission_id = context.args[0]
+    status_data = get_status_data(submission_id=submission_id)
+    
+    if not status_data:
+        await update.message.reply_text(f"❌ Registration {submission_id} not found.")
+        return
+    
+    # Create detailed status message
+    partner_info = ""
+    if status_data.get('partner_names'):
+        partner_status = status_data.get('partner_status', {})
+        registered_partners = partner_status.get('registered_partners', [])
+        missing_partners = partner_status.get('missing_partners', [])
+        
+        if registered_partners:
+            partner_info += f"**Registered Partners:** {', '.join(registered_partners)}\n"
+        if missing_partners:
+            partner_info += f"**Missing Partners:** {', '.join(missing_partners)}\n"
+    elif status_data.get('partner_alias'):
+        partner_info = f"**Partner:** {status_data['partner_alias']}\n"
+    else:
+        partner_info = "**Partner:** Coming alone\n"
+    
+    message = (
+        f"📋 **Registration Status: {submission_id}**\n\n"
+        f"**Name:** {status_data.get('alias', 'Unknown')}\n"
+        f"**Language:** {status_data.get('language', 'Unknown')}\n"
+        f"**Telegram ID:** {status_data.get('telegram_user_id', 'Not linked')}\n\n"
+        f"{partner_info}\n"
+        f"**Progress:**\n"
+        f"• Form: {'✅' if status_data.get('form', False) else '❌'}\n"
+        f"• Partner: {'✅' if status_data.get('partner', False) else '❌'}\n"
+        f"• Get-to-know: {'✅' if status_data.get('get_to_know', False) else '❌'}\n"
+        f"• Approved: {'✅' if status_data.get('approved', False) else '❌'}\n"
+        f"• Paid: {'✅' if status_data.get('paid', False) else '❌'}\n"
+        f"• Group: {'✅' if status_data.get('group_open', False) else '❌'}\n\n"
+        f"**Returning Participant:** {'Yes' if status_data.get('is_returning_participant', False) else 'No'}\n"
+        f"**Cancelled:** {'Yes' if status_data.get('cancelled', False) else 'No'}"
+    )
+    
+    await update.message.reply_text(message)
+
+async def admin_digest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generate and send weekly admin digest manually"""
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Access denied. Admin privileges required.")
+        return
+    
+    await update.message.reply_text("📊 Generating weekly digest...")
+    await send_weekly_admin_digest()
+    await update.message.reply_text("✅ Weekly digest sent to all admins!")
+
+async def send_weekly_admin_digest():
+    """Send weekly digest of registration statuses to admins"""
+    if not sheets_service:
+        print("⚠️  Cannot send weekly digest - Google Sheets not available")
+        return
+    
+    try:
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        column_indices = get_column_indices(headers)
+        
+        # Count registrations by status
+        stats = {
+            'total': 0,
+            'pending_approval': 0,
+            'approved': 0,
+            'paid': 0,
+            'partner_pending': 0,
+            'cancelled': 0
+        }
+        
+        recent_registrations = []
+        
+        for row in rows:
+            if len(row) <= column_indices.get('submission_id', 0):
+                continue
+                
+            submission_id = row[column_indices.get('submission_id', 0)]
+            if not submission_id:
+                continue
+                
+            stats['total'] += 1
+            
+            # Parse status
+            status_data = parse_submission_row(row, column_indices)
+            
+            # Count by status
+            if status_data.get('cancelled', False):
+                stats['cancelled'] += 1
+            elif not status_data.get('partner', False):
+                stats['partner_pending'] += 1
+            elif status_data.get('approved', False) and status_data.get('paid', False):
+                stats['paid'] += 1
+            elif status_data.get('approved', False):
+                stats['approved'] += 1
+            elif status_data.get('form', False) and status_data.get('partner', False) and status_data.get('get_to_know', False):
+                stats['pending_approval'] += 1
+            
+            # Add to recent registrations (last 7 days would require timestamp comparison)
+            recent_registrations.append({
+                'name': status_data.get('alias', 'Unknown'),
+                'submission_id': submission_id,
+                'status': 'Ready for Review' if (status_data.get('form', False) and status_data.get('partner', False) and status_data.get('get_to_know', False) and not status_data.get('approved', False)) else 'In Progress'
+            })
+        
+        # Create digest message
+        message = (
+            f"📊 **Weekly Registration Digest**\n\n"
+            f"**Total Registrations:** {stats['total']}\n"
+            f"**Pending Approval:** {stats['pending_approval']}\n"
+            f"**Approved:** {stats['approved']}\n"
+            f"**Paid:** {stats['paid']}\n"
+            f"**Partner Pending:** {stats['partner_pending']}\n"
+            f"**Cancelled:** {stats['cancelled']}\n\n"
+        )
+        
+        if stats['pending_approval'] > 0:
+            message += f"⚠️  **{stats['pending_approval']} registrations need your review!**\n\n"
+        
+        if recent_registrations[:5]:  # Show first 5
+            message += "**Recent Activity:**\n"
+            for reg in recent_registrations[:5]:
+                message += f"• {reg['name']} ({reg['submission_id']}) - {reg['status']}\n"
+        
+        await notify_admins(message, "weekly_digest")
+        
+    except Exception as e:
+        print(f"❌ Error generating weekly digest: {e}")
+
 # --- Automatic Reminder System ---
 class ReminderScheduler:
     """Handles automatic reminders based on time and user state"""
@@ -1248,8 +1752,10 @@ class ReminderScheduler:
             'payment_pending': 3 * 24 * 60 * 60,  # 3 days
             'group_opening': 7 * 24 * 60 * 60,  # 7 days before event
             'event_reminder': 24 * 60 * 60,  # 1 day before event
+            'weekly_digest': 7 * 24 * 60 * 60,  # 7 days
         }
         self.last_reminder_check = {}
+        self.last_weekly_digest = None
         
     def quick_completion_check(self, row, column_indices):
         """Quick check if user needs any reminders without expensive parsing"""
@@ -1342,6 +1848,9 @@ class ReminderScheduler:
                 continue
         
         print(f"📊 Reminder check summary: {total_users} users total, {skipped_users} skipped (quick check), {processed_users} processed")
+        
+        # Check if it's time for weekly digest
+        await self.check_weekly_digest()
     
     async def check_user_reminders(self, user_data: Dict):
         """Check if a specific user needs any reminders"""
@@ -1403,6 +1912,13 @@ class ReminderScheduler:
         print(f"🔔 Sending partner reminder to {user_data.get('alias', 'Unknown')} for missing: {missing_partners}")
         await self.send_automatic_partner_reminder(user_data, missing_partners)
         self.last_reminder_check[last_reminder_key] = now
+        
+        # Also notify admins about the partner delay
+        await notify_partner_delay(
+            submission_id=user_data.get('submission_id', 'Unknown'),
+            user_name=user_data.get('alias', 'Unknown'),
+            missing_partners=missing_partners
+        )
     
     async def check_payment_reminder(self, user_data: Dict):
         """Check if user needs a payment reminder"""
@@ -1419,6 +1935,16 @@ class ReminderScheduler:
         # Send payment reminder
         await self.send_automatic_payment_reminder(user_data)
         self.last_reminder_check[last_reminder_key] = now
+        
+        # Calculate days since approval (simplified - in reality you'd track approval timestamp)
+        days_overdue = 3  # Simplified - this would be calculated from actual approval date
+        
+        # Notify admins about payment overdue
+        await notify_payment_overdue(
+            submission_id=user_data.get('submission_id', 'Unknown'),
+            user_name=user_data.get('alias', 'Unknown'),
+            days_overdue=days_overdue
+        )
     
     async def check_group_reminder(self, user_data: Dict):
         """Check if user needs a group opening reminder"""
@@ -1447,6 +1973,21 @@ class ReminderScheduler:
         # TODO: Check if it's 1 day before event
         # This would require event date information
         pass
+    
+    async def check_weekly_digest(self):
+        """Check if it's time to send weekly digest to admins"""
+        now = datetime.now()
+        
+        # Check if it's time for weekly digest (every 7 days)
+        if self.last_weekly_digest:
+            time_since_last = (now - self.last_weekly_digest).total_seconds()
+            if time_since_last < self.reminder_intervals['weekly_digest']:
+                return  # Too soon for another digest
+        
+        # Send weekly digest
+        print("📊 Sending weekly admin digest...")
+        await send_weekly_admin_digest()
+        self.last_weekly_digest = now
     
     async def send_automatic_partner_reminder(self, user_data: Dict, missing_partners: List[str]):
         """Send automatic partner reminder"""
@@ -1565,6 +2106,13 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("remind_partner", remind_partner))
     app.add_handler(CommandHandler("cancel", cancel_registration))
+    
+    # Admin commands
+    app.add_handler(CommandHandler("admin_dashboard", admin_dashboard))
+    app.add_handler(CommandHandler("admin_approve", admin_approve))
+    app.add_handler(CommandHandler("admin_reject", admin_reject))
+    app.add_handler(CommandHandler("admin_status", admin_status))
+    app.add_handler(CommandHandler("admin_digest", admin_digest))
 
     print("Bot is running with polling...")
     

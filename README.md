@@ -80,6 +80,37 @@ python telegram_bot_polling.py
 | `/cancel <reason>` | Cancel registration with a reason |
 | `/help` | Show help message and available commands |
 
+## Admin Commands
+
+The bot includes a comprehensive admin notification system for managing registrations:
+
+| Command | Description |
+|---------|-------------|
+| `/admin_dashboard` | Show admin dashboard with registration statistics |
+| `/admin_approve SUBM_ID` | Approve a registration |
+| `/admin_reject SUBM_ID [reason]` | Reject a registration with optional reason |
+| `/admin_status SUBM_ID` | Check detailed status of a registration |
+| `/admin_digest` | Generate and send weekly digest manually |
+
+### Admin Notifications
+
+The system automatically sends notifications to admins for:
+- **New registrations ready for review** - When users complete all required steps
+- **Partner registration delays** - When partners haven't completed forms after 24 hours
+- **Payment overdue** - When approved registrations haven't completed payment
+- **Weekly digest** - Automatic summary of registration statuses every 7 days
+
+### Admin Configuration
+
+To enable admin notifications, add admin user IDs to your `.env` file:
+
+```env
+# Comma-separated list of Telegram User IDs
+ADMIN_USER_IDS=123456789,987654321
+```
+
+**Note:** To get your Telegram User ID, message [@userinfobot](https://t.me/userinfobot) on Telegram.
+
 ## Reminder System
 
 The bot now includes a comprehensive reminder system that automatically sends reminders based on registration status and timing:
@@ -161,6 +192,6 @@ The bot tracks these registration steps:
 - [ ] **Enhanced partner reminder sending** - Email/SMS integration for actual partner contact
 - [ ] **User data persistence** - Store Telegram ID ↔ Submission ID mapping in database
 - [ ] **Real-time status updates** - Webhook notifications from form updates
-- [ ] **Admin commands** - Allow admins to update status directly via bot
+- [x] **Admin commands** - Allow admins to update status directly via bot ✅
 - [ ] **Event date integration** - Calculate reminders based on actual event dates
 - [ ] **Reminder analytics** - Track reminder effectiveness and delivery rates 
