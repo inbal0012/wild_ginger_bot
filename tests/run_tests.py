@@ -58,6 +58,11 @@ def main():
             'description': 'Core unit tests for bot functionality'
         },
         {
+            'name': 'Get-to-Know Flow Tests',
+            'command': 'python -m pytest test_get_to_know.py -v',
+            'description': 'Interactive get-to-know conversation flow tests'
+        },
+        {
             'name': 'Integration Tests',
             'command': 'python -m pytest test_integration.py -v',
             'description': 'End-to-end integration tests'
@@ -79,7 +84,7 @@ def main():
         },
         {
             'name': 'All Tests with Coverage',
-            'command': 'python -m pytest test_telegram_bot.py test_integration.py --cov=telegram_bot_polling --cov-report=html --cov-report=term',
+            'command': 'python -m pytest test_telegram_bot.py test_get_to_know.py test_integration.py --cov=telegram_bot_polling --cov-report=html --cov-report=term',
             'description': 'All tests with coverage report'
         }
     ]
@@ -128,11 +133,12 @@ def run_specific_test(test_name):
     """Run a specific test category"""
     test_map = {
         'unit': 'python -m pytest test_telegram_bot.py -v',
+        'get_to_know': 'python -m pytest test_get_to_know.py -v',
         'integration': 'python -m pytest test_integration.py -v',
         'fixtures': 'python test_fixtures.py',
         'reminders': 'python -m pytest test_reminders.py -v',
         'multipartner': 'python -m pytest test_multipartner.py -v',
-        'all': 'python -m pytest test_telegram_bot.py test_integration.py -v'
+        'all': 'python -m pytest test_telegram_bot.py test_get_to_know.py test_integration.py -v'
     }
     
     if test_name not in test_map:

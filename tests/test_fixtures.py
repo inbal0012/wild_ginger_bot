@@ -20,63 +20,63 @@ class MockData:
         'Form Complete', 'Partner Complete', 'Get To Know Complete', 
         'Admin Approved', 'Payment Complete', 'Group Access',
         'Telegram User Id', 'Cancelled', 'Cancellation Date', 
-        'Cancellation Reason', 'Last Minute Cancellation'
+        'Cancellation Reason', 'Last Minute Cancellation', 'Get To Know Response'
     ]
     
     # Complete user with all steps done
     COMPLETE_USER_ROW = [
         'SUBM_12345', 'John Doe', 'עם פרטנר', 'Jane Smith',
         'English', 'No', 'TRUE', 'TRUE', 'TRUE', 'TRUE', 'TRUE', 'TRUE',
-        '123456789', 'FALSE', '', '', 'FALSE'
+        '123456789', 'FALSE', '', '', 'FALSE', 'I am a software developer with experience in community events. I love cooking and playing guitar.'
     ]
     
     # Incomplete user waiting for partner
     INCOMPLETE_USER_PARTNER_ROW = [
         'SUBM_12346', 'Alice Johnson', 'עם פרטנר', 'Bob Wilson',
         'English', 'No', 'TRUE', 'FALSE', 'TRUE', 'FALSE', 'FALSE', 'FALSE',
-        '123456790', 'FALSE', '', '', 'FALSE'
+        '123456790', 'FALSE', '', '', 'FALSE', 'I work in marketing and enjoy hiking and photography.'
     ]
     
     # User coming alone
     ALONE_USER_ROW = [
         'SUBM_12347', 'Sarah Connor', 'לבד', '',
         'English', 'Yes', 'TRUE', 'TRUE', 'TRUE', 'TRUE', 'FALSE', 'FALSE',
-        '123456791', 'FALSE', '', '', 'FALSE'
+        '123456791', 'FALSE', '', '', 'FALSE', 'I am a teacher and love reading sci-fi novels. I have attended similar events before.'
     ]
     
     # Hebrew user
     HEBREW_USER_ROW = [
         'SUBM_12348', 'יוחנן כהן', 'עם פרטנר', 'מרים לוי',
         'עברית', 'No', 'TRUE', 'TRUE', 'FALSE', 'FALSE', 'FALSE', 'FALSE',
-        '123456792', 'FALSE', '', '', 'FALSE'
+        '123456792', 'FALSE', '', '', 'FALSE', ''
     ]
     
     # Multi-partner user
     MULTI_PARTNER_USER_ROW = [
         'SUBM_12349', 'David Rodriguez', 'עם פרטנר', 'Maria Garcia, Carlos Santos, Ana Lopez',
         'English', 'No', 'TRUE', 'FALSE', 'FALSE', 'FALSE', 'FALSE', 'FALSE',
-        '123456793', 'FALSE', '', '', 'FALSE'
+        '123456793', 'FALSE', '', '', 'FALSE', ''
     ]
     
     # Cancelled user
     CANCELLED_USER_ROW = [
         'SUBM_12350', 'Emma Thompson', 'עם פרטנר', 'James Wilson',
         'English', 'No', 'TRUE', 'TRUE', 'TRUE', 'TRUE', 'TRUE', 'FALSE',
-        '123456794', 'TRUE', '2024-01-15 14:30:00', 'Sudden illness', 'TRUE'
+        '123456794', 'TRUE', '2024-01-15 14:30:00', 'Sudden illness', 'TRUE', 'I am a designer and love creating art installations.'
     ]
     
     # User with missing telegram ID
     NO_TELEGRAM_USER_ROW = [
         'SUBM_12351', 'Robert Brown', 'לבד', '',
         'English', 'No', 'TRUE', 'TRUE', 'TRUE', 'FALSE', 'FALSE', 'FALSE',
-        '', 'FALSE', '', '', 'FALSE'
+        '', 'FALSE', '', '', 'FALSE', ''
     ]
     
     # Malformed data user (missing fields)
     MALFORMED_USER_ROW = [
         'SUBM_12352', '', 'עם פרטנר', 'Invalid Partner Name',
         '', '', '', '', '', '', '', '', 
-        '123456795', '', '', '', ''
+        '123456795', '', '', '', '', ''
     ]
     
     @classmethod

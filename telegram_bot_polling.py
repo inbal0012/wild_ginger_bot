@@ -62,6 +62,8 @@ MESSAGES = {
                 "Available commands:\n"
                 "/start - Link your registration or welcome message\n"
                 "/status - Check your registration progress\n"
+                "/get_to_know - Complete the get-to-know section\n"
+                "/remind_partner - Send reminder to your partner\n"
                 "/help - Show this help message\n"
                 "/cancel <reason> - Cancel your registration with reason\n\n"
                 "To link your registration, use the link provided after filling out the form.\n"
@@ -90,6 +92,8 @@ MESSAGES = {
                 "פקודות זמינות:\n"
                 "/start - קישור הרשמה או הודעת ברוך הבא\n"
                 "/status - בדיקת התקדמות הרשמה\n"
+                "/get_to_know - השלמת חלק ההיכרות\n"
+                "/remind_partner - שליחת תזכורת לשותף\n"
                 "/help - הצגת הודעת עזרה זו\n"
                 "/cancel <סיבה> - ביטול הרשמה עם סיבה\n\n"
                 "כדי לקשר את הרשמתך, השתמש בקישור שניתן לאחר מילוי הטופס.\n"
@@ -302,6 +306,9 @@ def get_column_indices(headers):
             column_indices['cancellation_reason'] = i
         elif 'Last Minute Cancellation' in header or 'ביטול ברגע האחרון' in header:
             column_indices['last_minute_cancellation'] = i
+        # Get-to-know response column
+        elif 'Get To Know Response' in header or 'תשובת היכרות' in header:
+            column_indices['get_to_know_response'] = i
     return column_indices
 
 def find_submission_by_field(field_name: str, field_value: str):
@@ -576,6 +583,12 @@ def parse_submission_row(row, column_indices):
         partner_names = parse_multiple_partners(partner_name)
         if partner_names:
             partner_status = check_partner_registration_status(partner_names)
+            
+            # BUGFIX: Auto-update partner_complete when all partners are registered
+            if partner_status.get('all_registered', False):
+                print(f"✅ All partners registered for {full_name}! Auto-updating partner_complete to TRUE")
+                update_partner_complete(submission_id, True)
+                partner_complete = True  # Update local variable to reflect the change
     elif has_partner:
         print(f"⏭️  Skipping partner parsing for {full_name} (partner already complete)")
         partner_names = [partner_name]  # Just store the raw name, no parsing needed
@@ -1015,6 +1028,61 @@ def update_admin_approved(submission_id: str, approved: bool = True):
         print(f"❌ Error updating admin approval: {e}")
         return False
 
+def update_partner_complete(submission_id: str, partner_complete: bool = True):
+    """Update the Partner Complete field for a specific submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update Partner Complete")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        partner_complete_col = column_indices.get('partner_complete')
+        
+        if submission_id_col is None or partner_complete_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the Partner Complete field
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Convert column index to letter using proper function
+                col_letter = column_index_to_letter(partner_complete_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell with TRUE/FALSE
+                value = "TRUE" if partner_complete else "FALSE"
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[value]]}
+                ).execute()
+                
+                print(f"✅ Updated Partner Complete to {value} for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating Partner Complete: {e}")
+        return False
+
 # --- /start command handler ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1154,9 +1222,9 @@ async def continue_conversation(update: Update, context: ContextTypes.DEFAULT_TY
     if not status_data.get('get_to_know') and not status_data.get('is_returning_participant'):
         # User needs to complete get-to-know section
         if language == 'he':
-            parallel_tasks.append("💬 אתה יכול להשלים את חלק ההיכרות. זה עוזר לנו ליצור סביבה בטוחה ונוחה לכולם.")
+            parallel_tasks.append("💬 השתמש ב-/get_to_know כדי להשלים את חלק ההיכרות.")
         else:
-            parallel_tasks.append("💬 You can complete the get-to-know section. This helps us create a safe and comfortable environment for everyone.")
+            parallel_tasks.append("💬 Use /get_to_know to complete the get-to-know section.")
     
     # Send parallel tasks if any exist
     if parallel_tasks:
@@ -2097,6 +2165,368 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required. Please set it in your .env file.")
 
+# --- Get-to-Know Flow Implementation ---
+
+# Simple Hebrew get-to-know questions
+GET_TO_KNOW_QUESTIONS = {
+    'he': {
+        'first_question': "אשמח לשמוע עליך קצת.\nקצת מי אתה, קצת על הניסיון שלך עם אירועים מהסוג הזה, קצת משהו מגניב עליך 😃",
+        'followup_question': "אשמח לשמוע משהו מגניב ומעניין עליך. לא חובה (ואף רצוי) לא מתוך העולם האלטרנטיבי.",
+        'completion_message': "🎉 תודה על השיתוף! זה עוזר לנו ליצור סביבה בטוחה ונוחה לכולם.",
+        'already_completed': "✅ כבר השלמת את חלק ההיכרות!",
+        'no_registration': "אנא קשר את ההרשמה שלך קודם עם /start"
+    },
+    'en': {
+        'first_question': "I'd love to hear about you a bit.\nA bit about who you are, your experience with these types of events, something cool about you 😃",
+        'followup_question': "I'd love to hear something cool and interesting about you. Not required (and preferably not) from the alternative world.",
+        'completion_message': "🎉 Thanks for sharing! This helps us create a safe and comfortable environment for everyone.",
+        'already_completed': "✅ You've already completed the get-to-know section!",
+        'no_registration': "Please link your registration first with /start"
+    }
+}
+
+# Boring answer detection patterns - improved based on real examples
+BORING_PATTERNS = [
+    # Hebrew filler words and phrases
+    'אמממ', 'האמת שאין לי מושג', 'לא יודע', 'לא יודעת', 'אין לי מושג', 
+    'לא הכי טובה בלכתוב', 'לא כל כך יודע', 'מה לכתוב', 'אהמ', 'בסדר',
+    'אין לי', 'רגיל', 'רגילה', 'כלום', 'לא יודע מה לכתוב',
+    'נסיון מועט', 'לא יותר מידי', 'בייבי בהכל',
+    # English patterns - more specific to avoid false positives
+    'idk', "i don't know", 'regular', 'normal', 'nothing', 'boring', 'dunno',
+    'not sure', 'whatever', 'meh', 'dunno what to write', 'dont know'
+]
+
+# Strong boring indicators (if present, very likely boring)
+STRONG_BORING_INDICATORS = [
+    'אמממ', 'האמת שאין לי מושג', 'אין לי מושג', 'לא יודע מה לכתוב'
+]
+
+# Indicators of good answers (if present, less likely to be boring)
+GOOD_ANSWER_INDICATORS = [
+    # Specific details and experiences - but avoid negative contexts
+    'אוהב', 'אוהבת', 'מעניין', 'מעניינת', 'תחביב', 'עובד', 'עובדת', 
+    'לומד', 'לומדת', 'מנגן', 'שר',
+    # Personality traits
+    'אנרגיות', 'ידידותי', 'חייכן', 'שובב', 'אהבה', 'תחום',
+    # Specific activities or interests
+    'מוזיקה', 'ספורט', 'אמנות', 'טבע', 'נסיעות', 'קריאה',
+    'גיטרה', 'רקוד', 'טיול', 'צניחה', 'קוקטיל', 'אקסטרים',
+    'פסטיבל', 'אגרונומית', 'לאונרד כהן', 'קילימנג\'רו', 'טאקוונדו',
+    'פסיכותרפיה', 'שיבארי', 'שפות', 'בלשנות', 'עצלן', 'שלט',
+    # Professional/educational details
+    'מעצב', 'מאמן', 'מאמנת', 'מתורגמן', 'מתורגמנת', 'הייטק',
+    'חינוך', 'שיקום', 'עיסוי', 'אינטגרטיבי'
+]
+
+# Negative contexts that negate good indicators
+NEGATIVE_CONTEXTS = [
+    'אין לי מושג למשהו מגניב',
+    'לא יודע משהו מגניב',
+    'אין לי ניסיון',
+    'לא יודע מה',
+    'נסיון מועט'
+]
+
+# Store conversation states
+user_conversation_states = {}
+
+def is_boring_answer(answer: str) -> bool:
+    """
+    Improved boring answer detection based on real examples
+    
+    Criteria for boring answers:
+    1. Very short answers
+    2. Strong boring indicators (immediate red flags)
+    3. Many filler words without substance
+    4. Lacks specific details or personality
+    """
+    if not answer or len(answer.strip()) < 3:
+        return True
+    
+    answer_lower = answer.lower().strip()
+    original_answer = answer.strip()
+    
+    # Hebrew detection (contains Hebrew characters)
+    has_hebrew = any('\u0590' <= char <= '\u05FF' for char in answer)
+    
+    # 1. Too short for meaningful content
+    min_length = 30 if has_hebrew else 20
+    if len(answer_lower) < min_length:
+        return True
+    
+    # 2. Check for strong boring indicators (immediate red flags)
+    strong_boring_count = 0
+    for strong_indicator in STRONG_BORING_INDICATORS:
+        if strong_indicator in answer_lower:
+            strong_boring_count += 1
+    
+    # If has strong boring indicators, check if there's enough substance to override
+    if strong_boring_count > 0:
+        # Count good indicators
+        good_indicators = 0
+        for indicator in GOOD_ANSWER_INDICATORS:
+            if indicator in answer_lower:
+                good_indicators += 1
+        
+        # Check for negative contexts that negate good indicators
+        negative_context_count = 0
+        for negative_context in NEGATIVE_CONTEXTS:
+            if negative_context in answer_lower:
+                negative_context_count += 1
+        
+        # Reduce good indicators if there are negative contexts
+        if negative_context_count > 0:
+            good_indicators = max(0, good_indicators - negative_context_count)
+        
+        # If strong boring indicators but good substance, not boring
+        # More lenient for shorter answers with really good content
+        if good_indicators >= 2 and len(answer_lower) > 50:
+            return False
+        elif good_indicators >= 1 and len(answer_lower) > 40 and any(excellent in answer_lower for excellent in ['צניחה', 'אקסטרים', 'קילימנג\'רו', 'לאונרד כהן']):
+            return False
+        # Otherwise, if strong boring indicators, it's boring
+        else:
+            return True
+    
+    # 3. Count regular filler words/phrases
+    filler_count = 0
+    for pattern in BORING_PATTERNS:
+        if pattern in answer_lower:
+            filler_count += 1
+    
+    # 4. Count good indicators, but check for negative contexts
+    good_indicators = 0
+    for indicator in GOOD_ANSWER_INDICATORS:
+        if indicator in answer_lower:
+            good_indicators += 1
+    
+    # Check for negative contexts that negate good indicators
+    negative_context_count = 0
+    for negative_context in NEGATIVE_CONTEXTS:
+        if negative_context in answer_lower:
+            negative_context_count += 1
+    
+    # Reduce good indicators if there are negative contexts
+    if negative_context_count > 0:
+        good_indicators = max(0, good_indicators - negative_context_count)
+    
+    # 5. Calculate word count
+    words = answer_lower.split()
+    word_count = len(words)
+    
+    # Decision logic based on examples analysis:
+    
+    # If good indicators present and reasonable length, probably not boring
+    if good_indicators >= 2 and word_count >= 15:
+        return False
+    
+    # If multiple filler words and no good indicators = boring
+    if filler_count >= 2 and good_indicators == 0:
+        return True
+    
+    # If short answer with filler words and no substance = boring
+    if filler_count >= 1 and word_count < 25 and good_indicators == 0:
+        return True
+    
+    # Special case: answers that are just demographics without personality
+    # (like "בת 22 מכפר סבא, סטודנטית" without more detail)
+    if (word_count < 15 and 
+        any(demo in answer_lower for demo in ['בת ', 'בן ', 'מ', 'גר ב', 'גרה ב']) and
+        good_indicators == 0):
+        return True
+    
+    # If very short and no good indicators = boring
+    if word_count < 20 and good_indicators == 0:
+        return True
+    
+    # Special case: even with some good indicators, if it's very generic/short and has filler words
+    if word_count < 25 and filler_count >= 1 and good_indicators <= 1:
+        return True
+    
+    return False
+
+async def get_to_know_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the get-to-know conversation flow"""
+    user_id = str(update.effective_user.id)
+    
+    # Get user's submission data
+    submission_id = user_submissions.get(user_id)
+    if not submission_id:
+        # Try to find by Telegram User ID
+        status_data = get_status_data(telegram_user_id=user_id)
+        if status_data:
+            submission_id = status_data.get('submission_id')
+            user_submissions[user_id] = submission_id
+    
+    if not submission_id:
+        await update.message.reply_text("אנא קשר את ההרשמה שלך קודם עם /start")
+        return
+    
+    status_data = get_status_data(submission_id=submission_id)
+    if not status_data:
+        await update.message.reply_text("לא הצלחתי למצוא את ההרשמה שלך.")
+        return
+    
+    # Check if already completed
+    if status_data.get('get_to_know', False):
+        language = status_data.get('language', 'he')
+        await update.message.reply_text(GET_TO_KNOW_QUESTIONS[language]['already_completed'])
+        return
+    
+    # Start the conversation flow
+    language = status_data.get('language', 'he')
+    user_conversation_states[user_id] = {
+        'flow': 'get_to_know',
+        'step': 'first_question',
+        'language': language,
+        'submission_id': submission_id,
+        'responses': {}
+    }
+    
+    # Ask first question
+    await update.message.reply_text(GET_TO_KNOW_QUESTIONS[language]['first_question'])
+
+async def handle_get_to_know_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user responses during get-to-know flow"""
+    user_id = str(update.effective_user.id)
+    state = user_conversation_states.get(user_id)
+    
+    if not state or state.get('flow') != 'get_to_know':
+        return  # Not in get-to-know flow
+    
+    response = update.message.text.strip()
+    current_step = state['step']
+    language = state['language']
+    
+    if current_step == 'first_question':
+        # Store the first response
+        state['responses']['first_answer'] = response
+        
+        # Check if response is boring
+        if is_boring_answer(response):
+            # Ask follow-up question
+            state['step'] = 'followup_question'
+            await update.message.reply_text(GET_TO_KNOW_QUESTIONS[language]['followup_question'])
+        else:
+            # Good answer, complete the flow
+            await complete_get_to_know_flow(update, user_id)
+    
+    elif current_step == 'followup_question':
+        # Store the follow-up response
+        state['responses']['followup_answer'] = response
+        
+        # Complete the flow regardless of answer quality
+        await complete_get_to_know_flow(update, user_id)
+
+async def complete_get_to_know_flow(update: Update, user_id: str):
+    """Complete the get-to-know flow and store responses"""
+    state = user_conversation_states.get(user_id)
+    if not state:
+        return
+    
+    submission_id = state['submission_id']
+    responses = state['responses']
+    language = state['language']
+    
+    # Combine responses for storage
+    combined_response = ""
+    if 'first_answer' in responses:
+        combined_response += responses['first_answer']
+    if 'followup_answer' in responses:
+        if combined_response:
+            combined_response += "\n\n[Follow-up]: "
+        combined_response += responses['followup_answer']
+    
+    # Store response in Google Sheets
+    success = store_get_to_know_response(submission_id, combined_response)
+    
+    if success:
+        # Mark as complete
+        update_get_to_know_complete(submission_id, True)
+        
+        # Send completion message
+        await update.message.reply_text(GET_TO_KNOW_QUESTIONS[language]['completion_message'])
+        
+        # Continue with next steps
+        status_data = get_status_data(submission_id=submission_id)
+        if status_data:
+            await continue_conversation(update, None, status_data)
+    else:
+        # Error message
+        if language == 'he':
+            await update.message.reply_text("❌ שגיאה בשמירת התשובות. אנא נסה שוב.")
+        else:
+            await update.message.reply_text("❌ Error saving responses. Please try again.")
+    
+    # Clean up state
+    if user_id in user_conversation_states:
+        del user_conversation_states[user_id]
+
+def store_get_to_know_response(submission_id: str, response: str):
+    """Store get-to-know response in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot store get-to-know response")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        if submission_id_col is None:
+            print("❌ Could not find submission_id column")
+            return False
+        
+        # Look for get-to-know response column (we'll add this to the sheets)
+        get_to_know_response_col = None
+        for i, header in enumerate(headers):
+            if 'Get To Know Response' in header or 'תשובת היכרות' in header:
+                get_to_know_response_col = i
+                break
+        
+        if get_to_know_response_col is None:
+            print("⚠️  Get-to-know response column not found in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the response
+                sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
+                
+                # Convert column index to letter
+                col_letter = column_index_to_letter(get_to_know_response_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[response]]}
+                ).execute()
+                
+                print(f"✅ Stored get-to-know response for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error storing get-to-know response: {e}")
+        return False
+
+# --- End of Get-to-Know Flow Implementation ---
+
 # --- Main runner ---
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -2106,6 +2536,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("remind_partner", remind_partner))
     app.add_handler(CommandHandler("cancel", cancel_registration))
+    app.add_handler(CommandHandler("get_to_know", get_to_know_command))
     
     # Admin commands
     app.add_handler(CommandHandler("admin_dashboard", admin_dashboard))
@@ -2113,6 +2544,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("admin_reject", admin_reject))
     app.add_handler(CommandHandler("admin_status", admin_status))
     app.add_handler(CommandHandler("admin_digest", admin_digest))
+    
+    # Message handlers (must be after command handlers)
+    from telegram.ext import MessageHandler, filters
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_get_to_know_response))
 
     print("Bot is running with polling...")
     

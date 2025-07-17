@@ -76,9 +76,40 @@ python telegram_bot_polling.py
 | `/start` | Welcome message and bot introduction |
 | `/start SUBMISSION_ID` | Link Telegram account to form submission |
 | `/status` | Show registration progress across all steps |
+| `/get_to_know` | Complete the get-to-know section interactively |
 | `/remind_partner` | Send reminders to partners who haven't completed forms |
 | `/cancel <reason>` | Cancel registration with a reason |
 | `/help` | Show help message and available commands |
+
+## Get-to-Know Flow
+
+The bot now includes an interactive get-to-know flow that helps create a safe and comfortable environment for events:
+
+### How it works:
+1. **Start the flow**: Use `/get_to_know` command
+2. **Answer questions**: The bot asks simple questions about you, your experience, and something interesting about you
+3. **Smart follow-up**: If you give a short or generic answer, the bot will ask a follow-up question to encourage more sharing
+4. **Automatic completion**: Once you provide good responses, the bot marks this step as complete
+
+### Features:
+- **Hebrew-first**: Designed with Hebrew questions and responses
+- **Boring answer detection**: Automatically detects generic answers like "לא יודע", "רגיל", etc.
+- **Follow-up questions**: Encourages users to share something more interesting about themselves
+- **Google Sheets integration**: Stores responses in your spreadsheet for admin review
+- **Automatic status updates**: Marks the get-to-know step as complete when finished
+
+### Example flow:
+```
+User: /get_to_know
+Bot: אשמח לשמוע עליך קצת.
+     קצת מי אתה, קצת על הניסיון שלך עם אירועים מהסוג הזה, קצת משהו מגניב עליך 😃
+
+User: לא יודע
+Bot: אשמח לשמוע משהו מגניב ומעניין עליך. לא חובה (ואף רצוי) לא מתוך העולם האלטרנטיבי.
+
+User: אני אופה עוגות מדהימות ואוהב לרקוד סלסה
+Bot: 🎉 תודה על השיתוף! זה עוזר לנו ליצור סביבה בטוחה ונוחה לכולם.
+```
 
 ## Admin Commands
 
@@ -160,11 +191,13 @@ The bot expects your Google Sheet to have these columns (row 3 should contain he
 | **שם מלא** | Full name (Hebrew) | `דני כהן`, `מרים לוי` |
 | **מגיע.ה לבד או באיזון** | Coming alone or in balance (Hebrew) | `לבד`, `באיזון` |
 | **שם הפרטנר** | Partner name (Hebrew) | `יונתן`, `שרה` |
+| **Get To Know Complete** | Whether get-to-know section is finished | `TRUE`, `FALSE` |
+| **Get To Know Response** / **תשובת היכרות** | User's get-to-know response | `Free text response about the user` |
 
 ### Status Interpretation:
 - **Form**: ✅ if Submission ID exists
 - **Partner**: ✅ if not coming alone (`לבד`) and partner name provided
-- **Get-to-know**: ✅ assumed complete if form submitted
+- **Get-to-know**: ✅ if `Get To Know Complete` is `TRUE` or user is returning participant
 - **Approved**: ✅ if status contains `approved` or `מאושר`
 - **Paid**: ✅ if status contains `paid` or `שולם`
 - **Group**: ✅ if status contains `group` or `קבוצה`
@@ -189,9 +222,10 @@ The bot tracks these registration steps:
 - [x] **Add `/remind_partner` and `/help` commands** ✅
 - [x] **Automatic reminder system** - Time-based reminders for partners, payment, and groups ✅
 - [x] **Partner coordination features** - Remind partners, link partners ✅
+- [x] **Get-to-know interactive flow** - Complete conversational get-to-know section ✅
 - [ ] **Enhanced partner reminder sending** - Email/SMS integration for actual partner contact
 - [ ] **User data persistence** - Store Telegram ID ↔ Submission ID mapping in database
 - [ ] **Real-time status updates** - Webhook notifications from form updates
-- [x] **Admin commands** - Allow admins to update status directly via bot ✅
+- [ ] **Admin commands** - Allow admins to update status directly via bot
 - [ ] **Event date integration** - Calculate reminders based on actual event dates
 - [ ] **Reminder analytics** - Track reminder effectiveness and delivery rates 
