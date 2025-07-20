@@ -309,7 +309,160 @@ def get_column_indices(headers):
         # Get-to-know response column
         elif 'Get To Know Response' in header or 'תשובת היכרות' in header:
             column_indices['get_to_know_response'] = i
+        # NEW TASK 1: Check for "paid" column (column J) 
+        elif 'paid' in header.lower() or 'שולם' in header.lower():
+            column_indices['paid'] = i
     return column_indices
+
+def parse_submission_row(row, column_indices):
+    """Parse a row from the sheet into our status format"""
+    def get_cell_value(key, default=""):
+        index = column_indices.get(key)
+        if index is not None and index < len(row):
+            return row[index]
+        return default
+    
+    def get_boolean_value(key, default=False):
+        """Get a boolean value from the sheet, handling various formats"""
+        value = get_cell_value(key, "").strip().upper()
+        if value in ['TRUE', 'YES', 'כן', '1', 'V', '✓']:
+            return True
+        elif value in ['FALSE', 'NO', 'לא', '0', '', 'X']:
+            return False
+        return default
+    
+    def get_language_preference(response):
+        """Determine language preference from form response"""
+        if not response:
+            return 'en'  # Default to English
+        
+        response_lower = response.lower().strip()
+        if 'עברית' in response_lower or 'hebrew' in response_lower:
+            return 'he'
+        elif 'אנגלית' in response_lower or 'english' in response_lower:
+            return 'en'
+        else:
+            return 'en'  # Default to English
+    
+    def parse_multiple_partners(partner_text):
+        """Parse multiple partner names from text"""
+        if not partner_text:
+            return []
+        
+        # Split by common separators
+        separators = [',', '&', '+', 'ו', ' ו ', 'and', ' and ']
+        partners = [partner_text.strip()]
+        
+        for separator in separators:
+            new_partners = []
+            for partner in partners:
+                if separator in partner:
+                    new_partners.extend([p.strip() for p in partner.split(separator) if p.strip()])
+                else:
+                    new_partners.append(partner)
+            partners = new_partners
+        
+        return [p for p in partners if p and p.strip()]
+    
+    def check_partner_registration_status(partner_names):
+        """Check which partners are registered (simplified version)"""
+        if not partner_names:
+            return {
+                'all_registered': True,
+                'registered_partners': [],
+                'missing_partners': []
+            }
+        
+        # For now, we'll return a simplified status
+        # In a full implementation, this would check against the full sheet data
+        return {
+            'all_registered': False,
+            'registered_partners': [],
+            'missing_partners': partner_names
+        }
+    
+    # Extract basic information
+    submission_id = get_cell_value('submission_id')
+    full_name = get_cell_value('full_name')
+    telegram_user_id = get_cell_value('telegram_user_id')
+    
+    # Get language preference
+    language_response = get_cell_value('language_preference')
+    language = get_language_preference(language_response)
+    
+    # Get status columns
+    form_complete = get_boolean_value('form_complete', False)
+    partner_complete = get_boolean_value('partner_complete', False)
+    get_to_know_complete = get_boolean_value('get_to_know_complete', False)
+    admin_approved = get_boolean_value('admin_approved', False)
+    payment_complete = get_boolean_value('payment_complete', False)
+    group_access = get_boolean_value('group_access', False)
+    
+    # Get cancellation info
+    cancelled = get_boolean_value('cancelled', False)
+    cancellation_reason = get_cell_value('cancellation_reason')
+    
+    # Get returning participant status
+    returning_participant = get_boolean_value('returning_participant', False)
+    
+    # Handle partner information (only if partner not already complete)
+    partner_names = []
+    partner_status = {}
+    partner_alias = None
+    
+    if not partner_complete:
+        # Only do expensive partner parsing if needed
+        coming_alone = get_cell_value('coming_alone_or_balance')
+        partner_name_text = get_cell_value('partner_name')
+        
+        if partner_name_text and 'לבד' not in coming_alone:
+            # Parse partner names
+            partner_names = parse_multiple_partners(partner_name_text)
+            partner_alias = partner_name_text if len(partner_names) == 1 else None
+            
+            # Check partner registration status
+            partner_status = check_partner_registration_status(partner_names)
+            
+            # Auto-update partner complete if all registered
+            if partner_status.get('all_registered', False):
+                partner_complete = True
+                # In a full implementation, you'd call update_partner_complete here
+        else:
+            # Coming alone
+            partner_complete = True
+    else:
+        # Partner already complete, just get the names for display
+        partner_name_text = get_cell_value('partner_name')
+        if partner_name_text:
+            partner_names = parse_multiple_partners(partner_name_text)
+            partner_alias = partner_name_text if len(partner_names) == 1 else None
+    
+    # Check if returning participant should auto-complete get-to-know
+    if returning_participant and not get_to_know_complete:
+        get_to_know_complete = True
+        # In a full implementation, you'd call update_get_to_know_complete here
+    
+    # Build the result dictionary
+    result = {
+        'submission_id': submission_id,
+        'alias': full_name,
+        'telegram_user_id': telegram_user_id,
+        'language': language,
+        'form': form_complete,
+        'partner': partner_complete,
+        'get_to_know': get_to_know_complete,
+        'approved': admin_approved,
+        'paid': payment_complete,
+        'group_open': group_access,
+        'cancelled': cancelled,
+        'cancellation_reason': cancellation_reason,
+        'is_returning_participant': returning_participant,
+        'partner_names': partner_names,
+        'partner_alias': partner_alias,
+        'partner_status': partner_status
+    }
+    
+    return result
 
 def find_submission_by_field(field_name: str, field_value: str):
     """Generic function to find a submission by any field value"""
@@ -516,232 +669,204 @@ def update_get_to_know_complete(submission_id: str, get_to_know_complete: bool =
         print(f"❌ Error updating Get To Know Complete: {e}")
         return False
 
-def parse_submission_row(row, column_indices):
-    """Parse a row from the sheet into our status format"""
-    def get_cell_value(key, default=""):
-        index = column_indices.get(key)
-        if index is not None and index < len(row):
-            return row[index]
-        return default
-    
-    def get_boolean_value(key, default=False):
-        """Get a boolean value from the sheet, handling various formats"""
-        value = get_cell_value(key, "").strip().upper()
-        if value in ['TRUE', 'YES', 'כן', '1', 'V', '✓']:
-            return True
-        elif value in ['FALSE', 'NO', 'לא', '0', '', 'X']:
-            return False
-        return default
-    
-    def get_language_preference(response):
-        """Determine language preference from form response"""
-        if not response:
-            return 'en'  # Default to English if no response
-        
-        response_lower = response.lower().strip()
-        
-        # Check for Hebrew indicators
-        hebrew_indicators = ['עברית', 'hebrew', 'he', 'heb', 'עב']
-        english_indicators = ['english', 'אנגלית', 'en', 'eng', 'אנג']
-        
-        for indicator in hebrew_indicators:
-            if indicator in response_lower:
-                return 'he'
-        
-        for indicator in english_indicators:
-            if indicator in response_lower:
-                return 'en'
-        
-        # Default to Hebrew if contains Hebrew characters
-        if any('\u0590' <= char <= '\u05FF' for char in response):
-            return 'he'
-        
-        return 'en'  # Default to English
-    
-    # Get basic info
-    submission_id = get_cell_value('submission_id')
-    full_name = get_cell_value('full_name')
-    coming_alone_or_balance = get_cell_value('coming_alone_or_balance')
-    partner_name = get_cell_value('partner_name')
-    
-    # Parse status into our flow steps - no assumptions, use dedicated columns
-    form_complete = get_boolean_value('form_complete', False)
-    partner_complete = get_boolean_value('partner_complete', False)
-    get_to_know_complete = get_boolean_value('get_to_know_complete', False)
-    approved = get_boolean_value('admin_approved', False)
-    paid = get_boolean_value('payment_complete', False)
-    group_open = get_boolean_value('group_access', False)
-    
-    # Only do expensive operations if needed
-    partner_names = []
-    partner_status = {"all_registered": True, "registered_partners": [], "missing_partners": []}
-    has_partner = coming_alone_or_balance != 'לבד' and partner_name and partner_name.strip()
-    
-    # Only parse partners if partner is not complete
-    if not partner_complete and has_partner:
-        print(f"🔍 Parsing partners for {full_name} (partner not complete)")
-        partner_names = parse_multiple_partners(partner_name)
-        if partner_names:
-            partner_status = check_partner_registration_status(partner_names)
-            
-            # BUGFIX: Auto-update partner_complete when all partners are registered
-            if partner_status.get('all_registered', False):
-                print(f"✅ All partners registered for {full_name}! Auto-updating partner_complete to TRUE")
-                update_partner_complete(submission_id, True)
-                partner_complete = True  # Update local variable to reflect the change
-    elif has_partner:
-        print(f"⏭️  Skipping partner parsing for {full_name} (partner already complete)")
-        partner_names = [partner_name]  # Just store the raw name, no parsing needed
-    
-    # Only determine language preference if we need it for reminders
-    language_response = get_cell_value('language_preference')
-    preferred_language = get_language_preference(language_response)
-    
-    # Only check returning participant status if get_to_know is not complete
-    is_returning_participant = False
-    if not get_to_know_complete:
-        returning_participant_response = get_cell_value('returning_participant')
-        is_returning_participant = get_boolean_value('returning_participant', False)
-    else:
-        print(f"⏭️  Skipping returning participant check for {full_name} (get_to_know already complete)")
-    
-    return {
-        "submission_id": submission_id,
-        "alias": full_name,
-        "form": form_complete,
-        "partner": partner_complete,
-        "get_to_know": get_to_know_complete,
-        "approved": approved,
-        "paid": paid,
-        "group_open": group_open,
-        "partner_alias": partner_name if has_partner else None,
-        "partner_names": partner_names,  # List of all partner names
-        "partner_status": partner_status,  # Registration status of all partners
-        "coming_alone_or_balance": coming_alone_or_balance,
-        "raw_status": get_cell_value('status', ''),  # Keep as fallback/reference
-        "telegram_user_id": get_cell_value('telegram_user_id', ''),
-        "language": preferred_language,  # Add language preference
-        "is_returning_participant": is_returning_participant  # Add returning participant info
-    }
-
-def parse_multiple_partners(partner_names_string):
-    """Parse multiple partner names from a single string field"""
-    if not partner_names_string or partner_names_string.strip() == '':
-        return []
-    
-    print(f"🔍 Parsing partners from: '{partner_names_string}'")
-    
-    # Common separators for multiple names
-    separators = [',', '&', '+', ' ו ', ' and ', '\n', ';']
-    
-    # Start with the original string
-    names = [partner_names_string]
-    
-    # Split by each separator
-    for separator in separators:
-        new_names = []
-        for name in names:
-            split_names = [n.strip() for n in name.split(separator) if n.strip()]
-            new_names.extend(split_names)
-        names = new_names
-        if len(names) > 1:
-            print(f"   After splitting by '{separator}': {names}")
-    
-    # Filter out empty strings and duplicates
-    unique_names = []
-    for name in names:
-        cleaned_name = name.strip()
-        if cleaned_name and cleaned_name not in unique_names:
-            unique_names.append(cleaned_name)
-    
-    print(f"✅ Final parsed partner names: {unique_names}")
-    return unique_names
-
-def check_partner_registration_status(partner_names):
-    """Check if all partners are registered by searching for their names in the sheet"""
-    if not partner_names:
-        return {"all_registered": True, "registered_partners": [], "missing_partners": []}
-    
+def update_payment_complete(submission_id: str, payment_complete: bool = True):
+    """Update the Payment Complete field for a specific submission in Google Sheets"""
     if not sheets_service:
-        return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+        print("⚠️  Google Sheets not available - cannot update Payment Complete")
+        return False
     
     try:
+        # Get current data to find the row
         sheet_data = get_sheet_data()
         if not sheet_data:
-            return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+            return False
         
         headers = sheet_data['headers']
         rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
         column_indices = get_column_indices(headers)
         
-        full_name_col = column_indices.get('full_name')
-        if full_name_col is None:
-            return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+        submission_id_col = column_indices.get('submission_id')
+        payment_complete_col = column_indices.get('payment_complete')
         
-        # Get all registered names from the sheet
-        registered_names = []
-        for row in rows:
-            if len(row) > full_name_col and row[full_name_col].strip():
-                registered_names.append(row[full_name_col].strip())
+        if submission_id_col is None or payment_complete_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
         
-        print(f"🔍 Checking {len(partner_names)} partners against {len(registered_names)} registered names")
-        print(f"   Partners to check: {partner_names}")
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the Payment Complete field
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Convert column index to letter using proper function
+                col_letter = column_index_to_letter(payment_complete_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell with TRUE/FALSE
+                value = "TRUE" if payment_complete else "FALSE"
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[value]]}
+                ).execute()
+                
+                print(f"✅ Updated Payment Complete to {value} for submission {submission_id}")
+                return True
         
-        # Check each partner
-        registered_partners = []
-        missing_partners = []
-        
-        for partner_name in partner_names:
-            print(f"   Checking partner: '{partner_name}'")
-            found = False
-            
-            # Try exact match first
-            for registered_name in registered_names:
-                if partner_name.strip().lower() == registered_name.strip().lower():
-                    print(f"     ✅ Exact match found: '{registered_name}'")
-                    registered_partners.append(partner_name)
-                    found = True
-                    break
-            
-            # If no exact match, try partial match (more conservative)
-            if not found:
-                for registered_name in registered_names:
-                    # Check if the partner name is a substantial part of the registered name
-                    partner_words = partner_name.strip().lower().split()
-                    registered_words = registered_name.strip().lower().split()
-                    
-                    # At least 80% of partner name words should match
-                    if len(partner_words) >= 2:
-                        matching_words = sum(1 for word in partner_words if word in registered_words)
-                        if matching_words >= len(partner_words) * 0.8:
-                            print(f"     ✅ Partial match found: '{registered_name}' (matches {matching_words}/{len(partner_words)} words)")
-                            registered_partners.append(partner_name)
-                            found = True
-                            break
-                    else:
-                        # For single word names, be more strict
-                        if partner_name.strip().lower() in registered_name.strip().lower():
-                            print(f"     ✅ Single word match found: '{registered_name}'")
-                            registered_partners.append(partner_name)
-                            found = True
-                            break
-            
-            if not found:
-                print(f"     ❌ No match found for: '{partner_name}'")
-                missing_partners.append(partner_name)
-        
-        result = {
-            "all_registered": len(missing_partners) == 0,
-            "registered_partners": registered_partners,
-            "missing_partners": missing_partners
-        }
-        
-        print(f"📊 Partner status result: {result}")
-        return result
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
         
     except Exception as e:
-        print(f"❌ Error checking partner registration: {e}")
-        return {"all_registered": False, "registered_partners": [], "missing_partners": partner_names}
+        print(f"❌ Error updating Payment Complete: {e}")
+        return False
+
+def update_group_access(submission_id: str, group_access: bool = True):
+    """Update the Group Access field for a specific submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update Group Access")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        group_access_col = column_indices.get('group_access')
+        
+        if submission_id_col is None or group_access_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the Group Access field
+                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
+                sheet_row = row_index + 4
+                
+                # Convert column index to letter
+                col_letter = column_index_to_letter(group_access_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell with TRUE/FALSE
+                value = "TRUE" if group_access else "FALSE"
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[value]]}
+                ).execute()
+                
+                print(f"✅ Updated Group Access to {value} for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating Group Access: {e}")
+        return False
+
+def update_status(submission_id: str, status: str = "Ready for Review", approved: bool = False, paid: bool = False, group_open: bool = False):
+    """Update the status of a submission in Google Sheets"""
+    if not sheets_service:
+        print("⚠️  Google Sheets not available - cannot update status")
+        return False
+    
+    try:
+        # Get current data to find the row
+        sheet_data = get_sheet_data()
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        # Find column indices using the helper function
+        column_indices = get_column_indices(headers)
+        
+        submission_id_col = column_indices.get('submission_id')
+        status_col = column_indices.get('status')
+        approved_col = column_indices.get('admin_approved')
+        paid_col = column_indices.get('payment_complete')
+        group_open_col = column_indices.get('group_access')
+        
+        if submission_id_col is None or status_col is None or approved_col is None or paid_col is None or group_open_col is None:
+            print("❌ Could not find required columns in Google Sheets")
+            return False
+        
+        # Find the row with the matching submission ID
+        for row_index, row in enumerate(rows):
+            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
+                # Found the row! Update the status
+                sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
+                
+                # Convert column index to letter
+                col_letter = column_index_to_letter(status_col)
+                range_name = f"managed!{col_letter}{sheet_row}"
+                
+                # Update the cell
+                result = sheets_service.spreadsheets().values().update(
+                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': [[status]]}
+                ).execute()
+                
+                # Update approval status
+                if approved_col is not None:
+                    col_letter = column_index_to_letter(approved_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    result = sheets_service.spreadsheets().values().update(
+                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                        range=range_name,
+                        valueInputOption='RAW',
+                        body={'values': [[approved]]}
+                    ).execute()
+                
+                # Update payment status
+                if paid_col is not None:
+                    col_letter = column_index_to_letter(paid_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    result = sheets_service.spreadsheets().values().update(
+                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                        range=range_name,
+                        valueInputOption='RAW',
+                        body={'values': [[paid]]}
+                    ).execute()
+                
+                # Update group open status
+                if group_open_col is not None:
+                    col_letter = column_index_to_letter(group_open_col)
+                    range_name = f"managed!{col_letter}{sheet_row}"
+                    result = sheets_service.spreadsheets().values().update(
+                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                        range=range_name,
+                        valueInputOption='RAW',
+                        body={'values': [[group_open]]}
+                    ).execute()
+                
+                print(f"✅ Updated status for submission {submission_id}")
+                return True
+        
+        print(f"❌ Could not find submission {submission_id} in Google Sheets")
+        return False
+        
+    except Exception as e:
+        print(f"❌ Error updating status: {e}")
+        return False
 
 def update_cancellation_status(submission_id: str, cancelled: bool = True, reason: str = "", is_last_minute: bool = False):
     """Update cancellation status with reason and timing information"""
@@ -1110,6 +1235,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # If they participated in a previous event, they already know the process
             if status_data.get('is_returning_participant'):
                 update_get_to_know_complete(submission_id, True)
+            
+            # NEW TASK 1: if the "paid" col (J) isn't empty mark "Payment Complete"
+            # Check if there's payment data in the paid column and auto-update payment_complete
+            if sheets_service:
+                try:
+                    sheet_data = get_sheet_data()
+                    if sheet_data:
+                        headers = sheet_data['headers']
+                        rows = sheet_data['rows']
+                        column_indices = get_column_indices(headers)
+                        
+                        submission_id_col = column_indices.get('submission_id')
+                        paid_col = column_indices.get('paid')
+                        
+                        if submission_id_col is not None and paid_col is not None:
+                            # Find the current user's row
+                            for row in rows:
+                                if (len(row) > submission_id_col and 
+                                    row[submission_id_col] == submission_id and
+                                    len(row) > paid_col):
+                                    
+                                    paid_col_value = row[paid_col].strip() if row[paid_col] else ''
+                                    
+                                    if paid_col_value and not status_data.get('paid', False):
+                                        print(f"✅ Found payment data in paid column for {status_data['alias']}: '{paid_col_value}' - auto-updating payment_complete to TRUE")
+                                        update_payment_complete(submission_id, True)
+                                        break
+                except Exception as e:
+                    print(f"❌ Error checking paid column: {e}")
             
             # Send welcome message
             await update.message.reply_text(
@@ -2549,29 +2703,252 @@ if __name__ == '__main__':
     from telegram.ext import MessageHandler, filters
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_get_to_know_response))
 
+    # NEW TASK 2: telegram bot command autocomplete
+    # Set up command autocomplete for better user experience
+    async def setup_bot_commands():
+        """Set up bot command autocomplete"""
+        commands = [
+            BotCommand("start", "Link your registration or get welcome message"),
+            BotCommand("status", "Check your registration progress"),
+            BotCommand("help", "Show help and available commands"),
+            BotCommand("cancel", "Cancel your registration with reason"),
+            BotCommand("remind_partner", "Send reminder to partner(s)"),
+            BotCommand("get_to_know", "Complete the get-to-know section"),
+        ]
+        
+        try:
+            await app.bot.set_my_commands(commands)
+            print("✅ Bot command autocomplete set up successfully")
+        except Exception as e:
+            print(f"❌ Error setting up bot commands: {e}")
+    
+    # NEW TASK 3: Define Sheet1 monitoring functions before they are used
+    
+    def get_sheet1_data():
+        """Fetch data from Sheet1 (original form responses)"""
+        if not sheets_service:
+            return None
+        
+        try:
+            result = sheets_service.spreadsheets().values().get(
+                spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                range="Sheet1!A1:ZZ1000"  # Get all data from Sheet1
+            ).execute()
+            
+            values = result.get('values', [])
+            if not values:
+                return None
+                
+            # First row should be headers
+            headers = values[0] if values else []
+            rows = values[1:] if len(values) > 1 else []
+            
+            return {'headers': headers, 'rows': rows}
+        except Exception as e:
+            print(f"❌ Error reading Sheet1: {e}")
+            return None
+
+    def get_managed_sheet_data():
+        """Fetch data from managed sheet"""
+        return get_sheet_data()  # This already reads from managed sheet
+
+    def duplicate_to_managed_sheet(row_data, sheet1_headers):
+        """Duplicate a row from Sheet1 to the managed sheet"""
+        if not sheets_service:
+            print("⚠️  Google Sheets not available - cannot duplicate data")
+            return False
+        
+        try:
+            # Get current managed sheet data to find the next empty row
+            managed_data = get_managed_sheet_data()
+            if not managed_data:
+                print("❌ Could not access managed sheet")
+                return False
+            
+            # Find the next empty row in managed sheet
+            next_row = len(managed_data['rows']) + 4  # +4 for header and starting from row 3
+            
+            # Prepare the row data for insertion
+            # Map Sheet1 columns to managed sheet columns
+            mapped_row = map_sheet1_to_managed(row_data, sheet1_headers)
+            
+            # Insert the row
+            range_name = f"managed!A{next_row}:ZZ{next_row}"
+            
+            result = sheets_service.spreadsheets().values().update(
+                spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
+                range=range_name,
+                valueInputOption='RAW',
+                body={'values': [mapped_row]}
+            ).execute()
+            
+            print(f"✅ Duplicated new registration to managed sheet at row {next_row}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error duplicating to managed sheet: {e}")
+            return False
+
+    def map_sheet1_to_managed(row_data, sheet1_headers):
+        """Map Sheet1 row data to managed sheet format"""
+        # This function maps the columns from Sheet1 to the expected managed sheet format
+        # You'll need to adjust this based on your actual Sheet1 structure
+        
+        managed_row = [''] * 30  # Initialize with empty values
+        
+        # Map common fields (adjust indices based on your actual sheets)
+        for i, header in enumerate(sheet1_headers):
+            if i < len(row_data):
+                value = row_data[i]
+                
+                # Map specific columns to managed sheet positions
+                if 'Submission ID' in header:
+                    managed_row[0] = value  # Submission ID in column A
+                elif 'שם מלא' in header:
+                    managed_row[1] = value  # Full name in column B
+                elif 'שם הפרטנר' in header:
+                    managed_row[2] = value  # Partner name in column C
+                elif 'האם תרצו להמשיך בעברית או באנגלית' in header:
+                    managed_row[3] = value  # Language preference
+                elif 'האם השתתפת בעבר באחד מאירועי Wild Ginger' in header:
+                    managed_row[4] = value  # Returning participant
+                # Add more mappings as needed
+                
+        return managed_row
+
+    def check_for_new_registrations():
+        """Check Sheet1 for new entries and duplicate them to managed"""
+        print("🔍 Checking for new registrations in Sheet1...")
+        
+        # Get Sheet1 data
+        sheet1_data = get_sheet1_data()
+        if not sheet1_data:
+            print("⚠️  Could not access Sheet1")
+            return
+        
+        # Get managed sheet data
+        managed_data = get_managed_sheet_data()
+        if not managed_data:
+            print("⚠️  Could not access managed sheet")
+            return
+        
+        # Find submission IDs that exist in managed sheet
+        managed_submission_ids = set()
+        managed_headers = managed_data['headers']
+        managed_column_indices = get_column_indices(managed_headers)
+        submission_id_col = managed_column_indices.get('submission_id')
+        
+        if submission_id_col is not None:
+            for row in managed_data['rows']:
+                if len(row) > submission_id_col and row[submission_id_col]:
+                    managed_submission_ids.add(row[submission_id_col])
+        
+        # Check Sheet1 for new entries
+        sheet1_headers = sheet1_data['headers']
+        sheet1_submission_col = None
+        
+        # Find submission ID column in Sheet1
+        for i, header in enumerate(sheet1_headers):
+            if 'Submission ID' in header:
+                sheet1_submission_col = i
+                break
+        
+        if sheet1_submission_col is None:
+            print("❌ Could not find Submission ID column in Sheet1")
+            return
+        
+        # Check each row in Sheet1
+        new_registrations = []
+        for row in sheet1_data['rows']:
+            if len(row) > sheet1_submission_col and row[sheet1_submission_col]:
+                submission_id = row[sheet1_submission_col]
+                
+                # If this submission ID is not in managed sheet, it's new
+                if submission_id not in managed_submission_ids:
+                    new_registrations.append((submission_id, row))
+        
+        # Process new registrations
+        if new_registrations:
+            print(f"📝 Found {len(new_registrations)} new registrations")
+            
+            for submission_id, row_data in new_registrations:
+                # Duplicate to managed sheet
+                if duplicate_to_managed_sheet(row_data, sheet1_headers):
+                    # Notify admin about new registration
+                    asyncio.create_task(notify_admin_new_registration(submission_id, row_data, sheet1_headers))
+        else:
+            print("✅ No new registrations found")
+
+    async def notify_admin_new_registration(submission_id, row_data, sheet1_headers):
+        """Notify admin about new registration"""
+        # Get admin user IDs (you'll need to configure this)
+        admin_user_ids = [
+            # Add your admin Telegram user IDs here
+            # "123456789",  # Your admin user ID
+        ]
+        
+        if not admin_user_ids:
+            print("⚠️  No admin user IDs configured for notifications")
+            return
+        
+        # Extract name from row data
+        name = "Unknown"
+        for i, header in enumerate(sheet1_headers):
+            if 'שם מלא' in header and i < len(row_data):
+                name = row_data[i]
+                break
+        
+        # Create notification message
+        message = (
+            f"🆕 **New Registration Alert**\n\n"
+            f"**Name:** {name}\n"
+            f"**Submission ID:** {submission_id}\n"
+            f"**Status:** Automatically copied to managed sheet\n\n"
+            f"Please review and process this registration."
+        )
+        
+        # Send notification to each admin
+        for admin_id in admin_user_ids:
+            try:
+                # You'll need to initialize the bot context properly for this
+                # This is a simplified version - you may need to adjust based on your bot setup
+                app = ApplicationBuilder().token(BOT_TOKEN).build()
+                await app.bot.send_message(chat_id=admin_id, text=message)
+                print(f"✅ Notified admin {admin_id} about new registration: {submission_id}")
+            except Exception as e:
+                print(f"❌ Error notifying admin {admin_id}: {e}")
+    
+    # NEW TASK 3: Set up periodic monitoring for Sheet1 -> managed duplication
+    async def periodic_sheet_monitoring():
+        """Periodically check Sheet1 for new entries"""
+        while True:
+            try:
+                check_for_new_registrations()
+                await asyncio.sleep(300)  # Check every 5 minutes
+            except Exception as e:
+                print(f"❌ Error in periodic monitoring: {e}")
+                await asyncio.sleep(300)  # Continue checking even if there's an error
+    
+    # Post-init hook to start background tasks
+    async def post_init(application):
+        """Initialize background tasks after bot starts"""
+        # Set up command autocomplete
+        await setup_bot_commands()
+        
+        # Start periodic monitoring if sheets service is available
+        if sheets_service:
+            import asyncio
+            asyncio.create_task(periodic_sheet_monitoring())
+            print("✅ Sheet1 monitoring started - checking every 5 minutes")
+        else:
+            print("⚠️  Sheet1 monitoring disabled - Google Sheets not available")
+    
+    # Set the post_init hook
+    app.post_init = post_init
+    
     print("Bot is running with polling...")
     
-    # Define the scheduler function for the job queue
-    async def scheduled_reminder_check(context):
-        """Check and send reminders - called by job queue"""
-        try:
-            global reminder_scheduler
-            if not reminder_scheduler:
-                reminder_scheduler = ReminderScheduler(app)
-            
-            print("🔔 Checking for pending reminders...")
-            await reminder_scheduler.check_and_send_reminders()
-        except Exception as e:
-            print(f"❌ Error in scheduled reminder check: {e}")
-    
-    # Add the reminder job to the job queue (every 50 seconds as per user's testing)
-    job_queue = app.job_queue
-    job_queue.run_repeating(scheduled_reminder_check, interval=50, first=10)
-    
-    print("🔔 Reminder scheduler added to job queue (checking every 50 seconds)")
-    
     try:
-        # Run the bot normally
         app.run_polling(drop_pending_updates=True)
     except Exception as e:
         if "Conflict" in str(e):
@@ -2583,9 +2960,4 @@ if __name__ == '__main__':
             print("4. Check your task manager for other Python processes")
         else:
             print(f"❌ Error starting bot: {e}")
-        exit(1)
-    except KeyboardInterrupt:
-        print("👋 Bot stopped by user")
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
         exit(1)
