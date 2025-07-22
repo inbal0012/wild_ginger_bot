@@ -7,7 +7,7 @@ from ..models.registration import RegistrationData, StepProgress, RegistrationSt
 
 class SheetsService:
     def __init__(self):
-        self.sheets_service = settings.sheets_service
+        self.spreadsheet = settings.sheets_service
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
         self.range_name = settings.google_sheets_range
         
@@ -21,11 +21,11 @@ class SheetsService:
     
     def get_sheet_data(self) -> Optional[Dict[str, List]]:
         """Fetch all data from the Google Sheets"""
-        if not self.sheets_service:
+        if not self.spreadsheet:
             raise SheetsConnectionException("Google Sheets service not available")
         
         try:
-            result = self.sheets_service.spreadsheets().values().get(
+            result = self.spreadsheet.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
                 range=self.range_name
             ).execute()
@@ -256,7 +256,7 @@ class SheetsService:
 
     def _update_cell(self, submission_id: str, column_key: str, value: str) -> bool:
         """Generic method to update a single cell"""
-        if not self.sheets_service:
+        if not self.spreadsheet:
             print("⚠️  Google Sheets not available")
             return False
         
@@ -285,7 +285,7 @@ class SheetsService:
                     col_letter = self._column_index_to_letter(target_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
                     
-                    result = self.sheets_service.spreadsheets().values().update(
+                    result = self.spreadsheet.spreadsheets().values().update(
                         spreadsheetId=self.spreadsheet_id,
                         range=range_name,
                         valueInputOption='RAW',
@@ -354,7 +354,7 @@ class SheetsService:
 
     async def update_cancellation_status(self, submission_id: str, cancelled: bool = True, reason: str = "", is_last_minute: bool = False) -> bool:
         """Update cancellation status with reason and timing information"""
-        if not self.sheets_service:
+        if not self.spreadsheet:
             print("⚠️  Google Sheets not available - cannot update cancellation status")
             return False
         

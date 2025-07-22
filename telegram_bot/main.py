@@ -216,7 +216,7 @@ class WildGingerBot:
             
             # Start the bot
             logger.info("🤖 Starting Wild Ginger Bot...")
-            logger.info(f"🔧 Google Sheets: {'✅ Connected' if self.sheets_service.sheets_service else '❌ Not connected'}")
+            logger.info(f"🔧 Google Sheets: {'✅ Connected' if self.sheets_service.spreadsheet else '❌ Not connected'}")
             logger.info(f"👑 Admins configured: {len(settings.admin_user_ids)}")
             
             # Start background services
@@ -252,7 +252,7 @@ class WildGingerBot:
             loop.run_until_complete(self.setup_bot_commands())
             
             logger.info("🤖 Starting Wild Ginger Bot...")
-            logger.info(f"🔧 Google Sheets: {'✅ Connected' if self.sheets_service.sheets_service else '❌ Not connected'}")
+            logger.info(f"🔧 Google Sheets: {'✅ Connected' if self.sheets_service.spreadsheet else '❌ Not connected'}")
             logger.info(f"👑 Admins configured: {len(settings.admin_user_ids)}")
             logger.info("🔄 Background services will start after bot initialization")
             logger.info("🔍 Sheet monitoring will be active")

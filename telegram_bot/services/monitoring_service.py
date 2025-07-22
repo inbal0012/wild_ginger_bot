@@ -52,7 +52,7 @@ class MonitoringService:
             logger.warning("Sheet monitoring is already running")
             return
         
-        if not self.sheets_service.sheets_service:
+        if not self.sheets_service.spreadsheet:
             logger.warning("Google Sheets service not available - monitoring disabled")
             return
         
@@ -124,11 +124,11 @@ class MonitoringService:
     
     async def _get_sheet1_data(self) -> Optional[Dict[str, Any]]:
         """Fetch data from Sheet1 (original form responses)"""
-        if not self.sheets_service.sheets_service:
+        if not self.sheets_service.spreadsheet:
             return None
         
         try:
-            result = self.sheets_service.sheets_service.spreadsheets().values().get(
+            result = self.sheets_service.spreadsheet.spreadsheets().values().get(
                 spreadsheetId=self.sheets_service.spreadsheet_id,
                 range=self.sheet1_range
             ).execute()
@@ -213,7 +213,7 @@ class MonitoringService:
     
     async def _duplicate_to_managed_sheet(self, row_data: List, sheet1_headers: List[str]) -> bool:
         """Duplicate a row from Sheet1 to the managed sheet"""
-        if not self.sheets_service.sheets_service:
+        if not self.sheets_service.spreadsheet:
             logger.warning("Google Sheets not available - cannot duplicate data")
             return False
         
@@ -233,7 +233,7 @@ class MonitoringService:
             # Insert the row
             range_name = f"managed!A{next_row}:ZZ{next_row}"
             
-            result = self.sheets_service.sheets_service.spreadsheets().values().update(
+            result = self.sheets_service.spreadsheet.spreadsheets().values().update(
                 spreadsheetId=self.sheets_service.spreadsheet_id,
                 range=range_name,
                 valueInputOption='RAW',
@@ -314,7 +314,7 @@ class MonitoringService:
             'monitoring_interval': self.monitoring_interval,
             'sheet1_range': self.sheet1_range,
             'has_bot_application': self.bot_application is not None,
-            'sheets_service_available': self.sheets_service.sheets_service is not None,
+            'sheets_service_available': self.sheets_service.spreadsheet is not None,
             'admin_count': len(settings.admin_user_ids),
             'column_mappings_count': len(self.column_mappings)
         }
