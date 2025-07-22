@@ -9,6 +9,9 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from telegram_bot.config import settings
+from telegram_bot.services.sheets_service import SheetsService
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -31,6 +34,8 @@ if admin_ids_env:
 # Admin notification preferences
 ADMIN_NOTIFICATIONS = {
     'new_registrations': True,
+    'new_get_to_know_responses': True,
+    'ready_for_review': True,
     'partner_delays': True,
     'payment_overdue': True,
     'weekly_digest': True,
@@ -214,135 +219,12 @@ def get_status_message(status_data):
     
     return message
 
-# --- Google Sheets configuration ---
-GOOGLE_SHEETS_CREDENTIALS_FILE = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
-GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")
-GOOGLE_SHEETS_RANGE = os.getenv("GOOGLE_SHEETS_RANGE", "managed!A3:GG1000")  # Start from row 3 (headers)
-
 # Initialize Google Sheets service
-sheets_service = None
-if GOOGLE_SHEETS_CREDENTIALS_FILE and GOOGLE_SHEETS_SPREADSHEET_ID:
-    try:
-        credentials = service_account.Credentials.from_service_account_file(
-            GOOGLE_SHEETS_CREDENTIALS_FILE,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']  # Read and write permissions
-        )
-        sheets_service = build('sheets', 'v4', credentials=credentials)
-        print("✅ Google Sheets integration enabled")
-    except Exception as e:
-        print(f"❌ Google Sheets integration failed: {e}")
-        sheets_service = None
-else:
-    print("⚠️  Google Sheets not configured - using mock data")
+sheets_service = SheetsService()
 
 # --- Google Sheets functions ---
-def get_sheet_data():
-    """Fetch all data from the Google Sheets"""
-    if not sheets_service:
-        return None
-    
-    try:
-        result = sheets_service.spreadsheets().values().get(
-            spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-            range=GOOGLE_SHEETS_RANGE
-        ).execute()
-        
-        values = result.get('values', [])
-        if not values:
-            return None
-            
-        # First row should be headers
-        headers = values[0] if values else []
-        rows = values[1:] if len(values) > 1 else []
-        
-        return {'headers': headers, 'rows': rows}
-    except Exception as e:
-        print(f"❌ Error reading Google Sheets: {e}")
-        return None
-
-def get_column_indices(headers):
-    """Get column indices for all important fields from headers"""
-    column_indices = {}
-    for i, header in enumerate(headers):
-        if 'Submission ID' in header and 'time' not in header.lower():
-            column_indices['submission_id'] = i
-        elif 'שם מלא' in header:  # Full name in Hebrew
-            column_indices['full_name'] = i
-        elif 'מגיע.ה לבד או באיזון' in header:  # Coming alone or in balance
-            column_indices['coming_alone_or_balance'] = i
-        elif 'שם הפרטנר' in header:  # Partner name in Hebrew
-            column_indices['partner_name'] = i
-        # Language preference column
-        elif 'האם תרצו להמשיך בעברית או באנגלית' in header or 'Language Preference' in header:
-            column_indices['language_preference'] = i
-        # Returning participant column
-        elif 'האם השתתפת בעבר באחד מאירועי Wild Ginger' in header or 'Previous Wild Ginger Participation' in header:
-            column_indices['returning_participant'] = i
-        # New dedicated status columns
-        elif 'Form Complete' in header or 'טופס הושלם' in header:
-            column_indices['form_complete'] = i
-        elif 'Partner Complete' in header or 'פרטנר הושלם' in header:
-            column_indices['partner_complete'] = i
-        elif 'Get To Know Complete' in header or 'היכרות הושלמה' in header:
-            column_indices['get_to_know_complete'] = i
-        elif 'Admin Approved' in header or 'מאושר' in header:
-            column_indices['admin_approved'] = i
-        elif 'Payment Complete' in header or 'תשלום הושלם' in header:
-            column_indices['payment_complete'] = i
-        elif 'Group Access' in header or 'גישה לקבוצה' in header:
-            column_indices['group_access'] = i
-        # Keep the old status column as fallback
-        elif 'Status' in header or 'status' in header.lower():
-            column_indices['status'] = i
-        # New: Telegram User ID column
-        elif 'Telegram User Id' in header or 'מזהה משתמש טלגרם' in header:
-            column_indices['telegram_user_id'] = i
-        # Cancellation tracking columns
-        elif 'Cancelled' in header or 'בוטל' in header or 'מבוטל' in header:
-            column_indices['cancelled'] = i
-        elif 'Cancellation Date' in header or 'תאריך ביטול' in header:
-            column_indices['cancellation_date'] = i
-        elif 'Cancellation Reason' in header or 'סיבת ביטול' in header:
-            column_indices['cancellation_reason'] = i
-        elif 'Last Minute Cancellation' in header or 'ביטול ברגע האחרון' in header:
-            column_indices['last_minute_cancellation'] = i
-        # Get-to-know response column
-        elif 'Get To Know Response' in header or 'תשובת היכרות' in header:
-            column_indices['get_to_know_response'] = i
-        # NEW TASK 1: Check for "paid" column (column J) 
-        elif 'paid' in header.lower() or 'שולם' in header.lower():
-            column_indices['paid'] = i
-    return column_indices
-
 def parse_submission_row(row, column_indices):
     """Parse a row from the sheet into our status format"""
-    def get_cell_value(key, default=""):
-        index = column_indices.get(key)
-        if index is not None and index < len(row):
-            return row[index]
-        return default
-    
-    def get_boolean_value(key, default=False):
-        """Get a boolean value from the sheet, handling various formats"""
-        value = get_cell_value(key, "").strip().upper()
-        if value in ['TRUE', 'YES', 'כן', '1', 'V', '✓']:
-            return True
-        elif value in ['FALSE', 'NO', 'לא', '0', '', 'X']:
-            return False
-        return default
-    
-    def get_language_preference(response):
-        """Determine language preference from form response"""
-        if not response:
-            return 'en'  # Default to English
-        
-        response_lower = response.lower().strip()
-        if 'עברית' in response_lower or 'hebrew' in response_lower:
-            return 'he'
-        elif 'אנגלית' in response_lower or 'english' in response_lower:
-            return 'en'
-        else:
-            return 'en'  # Default to English
     
     def parse_multiple_partners(partner_text):
         """Parse multiple partner names from text"""
@@ -382,28 +264,27 @@ def parse_submission_row(row, column_indices):
         }
     
     # Extract basic information
-    submission_id = get_cell_value('submission_id')
-    full_name = get_cell_value('full_name')
-    telegram_user_id = get_cell_value('telegram_user_id')
+    submission_id = sheets_service.get_cell_value(row, 'submission_id')
+    full_name = sheets_service.get_cell_value(row, 'full_name')
+    telegram_user_id = sheets_service.get_cell_value(row, 'telegram_user_id')
     
     # Get language preference
-    language_response = get_cell_value('language_preference')
-    language = get_language_preference(language_response)
+    language = sheets_service.get_language_preference(row)
     
     # Get status columns
-    form_complete = get_boolean_value('form_complete', False)
-    partner_complete = get_boolean_value('partner_complete', False)
-    get_to_know_complete = get_boolean_value('get_to_know_complete', False)
-    admin_approved = get_boolean_value('admin_approved', False)
-    payment_complete = get_boolean_value('payment_complete', False)
-    group_access = get_boolean_value('group_access', False)
+    form_complete = sheets_service.get_boolean_value(row, 'form_complete', False)
+    partner_complete = sheets_service.get_boolean_value(row, 'partner_complete', False)
+    get_to_know_complete = sheets_service.get_boolean_value(row, 'get_to_know_complete', False)
+    admin_approved = sheets_service.get_boolean_value(row, 'admin_approved', False)
+    payment_complete = sheets_service.get_boolean_value(row, 'payment_complete', False)
+    group_access = sheets_service.get_boolean_value(row, 'group_access', False)
     
     # Get cancellation info
-    cancelled = get_boolean_value('cancelled', False)
-    cancellation_reason = get_cell_value('cancellation_reason')
+    cancelled = sheets_service.get_boolean_value(row, 'cancelled', False)
+    cancellation_reason = sheets_service.get_cell_value(row, 'cancellation_reason')
     
     # Get returning participant status
-    returning_participant = get_boolean_value('returning_participant', False)
+    returning_participant = sheets_service.get_boolean_value(row, 'returning_participant', False)
     
     # Handle partner information (only if partner not already complete)
     partner_names = []
@@ -412,8 +293,8 @@ def parse_submission_row(row, column_indices):
     
     if not partner_complete:
         # Only do expensive partner parsing if needed
-        coming_alone = get_cell_value('coming_alone_or_balance')
-        partner_name_text = get_cell_value('partner_name')
+        coming_alone = sheets_service.get_cell_value(row, 'coming_alone_or_balance')
+        partner_name_text = sheets_service.get_cell_value(row, 'partner_name')
         
         if partner_name_text and 'לבד' not in coming_alone:
             # Parse partner names
@@ -432,7 +313,7 @@ def parse_submission_row(row, column_indices):
             partner_complete = True
     else:
         # Partner already complete, just get the names for display
-        partner_name_text = get_cell_value('partner_name')
+        partner_name_text = sheets_service.get_cell_value(row, 'partner_name')
         if partner_name_text:
             partner_names = parse_multiple_partners(partner_name_text)
             partner_alias = partner_name_text if len(partner_names) == 1 else None
@@ -464,101 +345,6 @@ def parse_submission_row(row, column_indices):
     
     return result
 
-def find_submission_by_field(field_name: str, field_value: str):
-    """Generic function to find a submission by any field value"""
-    sheet_data = get_sheet_data()
-    if not sheet_data:
-        return None
-    
-    headers = sheet_data['headers']
-    rows = sheet_data['rows']
-    
-    column_indices = get_column_indices(headers)
-    
-    # Look for the field value in the rows
-    field_column_index = column_indices.get(field_name)
-    if field_column_index is None:
-        return None
-    
-    for row in rows:
-        if len(row) > field_column_index:
-            if row[field_column_index] == field_value:
-                return parse_submission_row(row, column_indices)
-    
-    return None
-
-def find_submission_by_id(submission_id: str):
-    """Find a submission by its ID in the Google Sheets"""
-    result = find_submission_by_field('submission_id', submission_id)
-    print(result)
-    return result
-
-def find_submission_by_telegram_id(telegram_user_id: str):
-    """Find a submission by Telegram User ID in the Google Sheets"""
-    return find_submission_by_field('telegram_user_id', telegram_user_id)
-
-def column_index_to_letter(col_index):
-    """Convert a column index (0-based) to Excel column letter format (A, B, ..., Z, AA, AB, ...)"""
-    result = ""
-    while col_index >= 0:
-        result = chr(ord('A') + (col_index % 26)) + result
-        col_index = col_index // 26 - 1
-    return result
-
-def update_telegram_user_id(submission_id: str, telegram_user_id: str):
-    """Update the Telegram User ID for a specific submission in Google Sheets"""
-    if not sheets_service:
-        print("⚠️  Google Sheets not available - cannot update Telegram User ID")
-        return False
-    
-    try:
-        # Get current data to find the row
-        sheet_data = get_sheet_data()
-        if not sheet_data:
-            return False
-        
-        headers = sheet_data['headers']
-        rows = sheet_data['rows']
-        
-        # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
-        
-        submission_id_col = column_indices.get('submission_id')
-        telegram_user_id_col = column_indices.get('telegram_user_id')
-        
-        if submission_id_col is None or telegram_user_id_col is None:
-            print("❌ Could not find required columns in Google Sheets")
-            return False
-        
-        # Find the row with the matching submission ID
-        for row_index, row in enumerate(rows):
-            if len(row) > submission_id_col and row[submission_id_col] == submission_id:
-                # Found the row! Update the Telegram User ID
-                # Row index in the sheet = row_index + 4 (header row + 1-based indexing + start from row 3)
-                sheet_row = row_index + 4
-                
-                # Convert column index to letter using proper function
-                col_letter = column_index_to_letter(telegram_user_id_col)
-                range_name = f"managed!{col_letter}{sheet_row}"
-                
-                # Update the cell
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[telegram_user_id]]}
-                ).execute()
-                
-                print(f"✅ Updated Telegram User ID for submission {submission_id}")
-                return True
-        
-        print(f"❌ Could not find submission {submission_id} in Google Sheets")
-        return False
-        
-    except Exception as e:
-        print(f"❌ Error updating Telegram User ID: {e}")
-        return False
-
 def update_form_complete(submission_id: str, form_complete: bool = True):
     """Update the Form Complete field for a specific submission in Google Sheets"""
     if not sheets_service:
@@ -567,7 +353,7 @@ def update_form_complete(submission_id: str, form_complete: bool = True):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return False
         
@@ -575,7 +361,7 @@ def update_form_complete(submission_id: str, form_complete: bool = True):
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         form_complete_col = column_indices.get('form_complete')
@@ -592,17 +378,12 @@ def update_form_complete(submission_id: str, form_complete: bool = True):
                 sheet_row = row_index + 4
                 
                 # Convert column index to letter using proper function
-                col_letter = column_index_to_letter(form_complete_col)
+                col_letter = sheets_service.column_index_to_letter(form_complete_col)
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell with TRUE/FALSE
                 value = "TRUE" if form_complete else "FALSE"
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[value]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated Form Complete to {value} for submission {submission_id}")
                 return True
@@ -622,7 +403,7 @@ def update_get_to_know_complete(submission_id: str, get_to_know_complete: bool =
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return False
         
@@ -630,7 +411,7 @@ def update_get_to_know_complete(submission_id: str, get_to_know_complete: bool =
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         get_to_know_complete_col = column_indices.get('get_to_know_complete')
@@ -647,17 +428,12 @@ def update_get_to_know_complete(submission_id: str, get_to_know_complete: bool =
                 sheet_row = row_index + 4
                 
                 # Convert column index to letter using proper function
-                col_letter = column_index_to_letter(get_to_know_complete_col)
+                col_letter = sheets_service.column_index_to_letter(get_to_know_complete_col)
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell with TRUE/FALSE
                 value = "TRUE" if get_to_know_complete else "FALSE"
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[value]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated Get To Know Complete to {value} for submission {submission_id}")
                 return True
@@ -677,7 +453,7 @@ def update_payment_complete(submission_id: str, payment_complete: bool = True):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return False
         
@@ -685,7 +461,7 @@ def update_payment_complete(submission_id: str, payment_complete: bool = True):
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         payment_complete_col = column_indices.get('payment_complete')
@@ -702,17 +478,12 @@ def update_payment_complete(submission_id: str, payment_complete: bool = True):
                 sheet_row = row_index + 4
                 
                 # Convert column index to letter using proper function
-                col_letter = column_index_to_letter(payment_complete_col)
+                col_letter = sheets_service.column_index_to_letter(payment_complete_col)
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell with TRUE/FALSE
                 value = "TRUE" if payment_complete else "FALSE"
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[value]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated Payment Complete to {value} for submission {submission_id}")
                 return True
@@ -732,7 +503,7 @@ def update_group_access(submission_id: str, group_access: bool = True):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return False
         
@@ -740,7 +511,7 @@ def update_group_access(submission_id: str, group_access: bool = True):
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         group_access_col = column_indices.get('group_access')
@@ -757,17 +528,12 @@ def update_group_access(submission_id: str, group_access: bool = True):
                 sheet_row = row_index + 4
                 
                 # Convert column index to letter
-                col_letter = column_index_to_letter(group_access_col)
+                col_letter = sheets_service.column_index_to_letter(group_access_col)
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell with TRUE/FALSE
                 value = "TRUE" if group_access else "FALSE"
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[value]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated Group Access to {value} for submission {submission_id}")
                 return True
@@ -787,7 +553,7 @@ def update_status(submission_id: str, status: str = "Ready for Review", approved
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return False
         
@@ -795,7 +561,7 @@ def update_status(submission_id: str, status: str = "Ready for Review", approved
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         status_col = column_indices.get('status')
@@ -814,49 +580,29 @@ def update_status(submission_id: str, status: str = "Ready for Review", approved
                 sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
                 
                 # Convert column index to letter
-                col_letter = column_index_to_letter(status_col)
+                col_letter = sheets_service.column_index_to_letter(status_col) 
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[status]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, status)
                 
                 # Update approval status
                 if approved_col is not None:
-                    col_letter = column_index_to_letter(approved_col)
+                    col_letter = sheets_service.column_index_to_letter(approved_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
-                    result = sheets_service.spreadsheets().values().update(
-                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                        range=range_name,
-                        valueInputOption='RAW',
-                        body={'values': [[approved]]}
-                    ).execute()
+                    result = sheets_service.update_range(range_name, approved)
                 
                 # Update payment status
                 if paid_col is not None:
-                    col_letter = column_index_to_letter(paid_col)
+                    col_letter = sheets_service.column_index_to_letter(paid_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
-                    result = sheets_service.spreadsheets().values().update(
-                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                        range=range_name,
-                        valueInputOption='RAW',
-                        body={'values': [[paid]]}
-                    ).execute()
+                    result = sheets_service.update_range(range_name, paid)
                 
                 # Update group open status
                 if group_open_col is not None:
-                    col_letter = column_index_to_letter(group_open_col)
+                    col_letter = sheets_service.column_index_to_letter(group_open_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
-                    result = sheets_service.spreadsheets().values().update(
-                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                        range=range_name,
-                        valueInputOption='RAW',
-                        body={'values': [[group_open]]}
-                    ).execute()
+                    result = sheets_service.update_range(range_name, group_open)
                 
                 print(f"✅ Updated status for submission {submission_id}")
                 return True
@@ -876,7 +622,7 @@ def update_cancellation_status(submission_id: str, cancelled: bool = True, reaso
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data() 
         if not sheet_data:
             return False
         
@@ -884,7 +630,7 @@ def update_cancellation_status(submission_id: str, cancelled: bool = True, reaso
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         cancelled_col = column_indices.get('cancelled')
@@ -908,7 +654,7 @@ def update_cancellation_status(submission_id: str, cancelled: bool = True, reaso
                 
                 # Update cancelled status
                 if cancelled_col is not None:
-                    col_letter = column_index_to_letter(cancelled_col)
+                    col_letter = sheets_service.column_index_to_letter(cancelled_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
                     value = "TRUE" if cancelled else "FALSE"
                     updates.append((range_name, value))
@@ -916,32 +662,27 @@ def update_cancellation_status(submission_id: str, cancelled: bool = True, reaso
                 # Update cancellation date (current date)
                 if cancellation_date_col is not None and cancelled:
                     from datetime import datetime
-                    col_letter = column_index_to_letter(cancellation_date_col)
+                    col_letter = sheets_service.column_index_to_letter(cancellation_date_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
                     current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     updates.append((range_name, current_date))
                 
                 # Update cancellation reason
                 if cancellation_reason_col is not None and reason:
-                    col_letter = column_index_to_letter(cancellation_reason_col)
+                    col_letter = sheets_service.column_index_to_letter(cancellation_reason_col)
                     range_name = f"managed!{col_letter}{sheet_row}"
                     updates.append((range_name, reason))
                 
                 # Update last minute flag
                 if last_minute_col is not None:
-                    col_letter = column_index_to_letter(last_minute_col)
+                    col_letter = sheets_service.column_index_to_letter(last_minute_col) 
                     range_name = f"managed!{col_letter}{sheet_row}"
                     value = "TRUE" if is_last_minute else "FALSE"
                     updates.append((range_name, value))
                 
                 # Execute all updates
                 for range_name, value in updates:
-                    result = sheets_service.spreadsheets().values().update(
-                        spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                        range=range_name,
-                        valueInputOption='RAW',
-                        body={'values': [[value]]}
-                    ).execute()
+                    result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated cancellation status for submission {submission_id}")
                 if reason:
@@ -985,17 +726,17 @@ def is_last_minute_cancellation(event_date_str: str, cancellation_date_str: str 
         return False
 
 # --- Get status data (Google Sheets or mock) ---
-def get_status_data(submission_id: str = None, telegram_user_id: str = None):
+async def get_status_data(submission_id: str = None, telegram_user_id: str = None):
     """Get status data from Google Sheets or fallback to mock data"""
     if sheets_service and submission_id:
         # Try to get real data from Google Sheets
-        sheet_data = find_submission_by_id(submission_id)
+        sheet_data = await sheets_service.find_submission_by_id(submission_id)
         if sheet_data:
             return sheet_data
     
     if sheets_service and telegram_user_id:
         # Try to get real data from Google Sheets by Telegram User ID
-        sheet_data = find_submission_by_telegram_id(telegram_user_id)
+        sheet_data = await sheets_service.find_submission_by_telegram_id(telegram_user_id)
         if sheet_data:
             return sheet_data
     
@@ -1043,7 +784,7 @@ async def notify_registration_ready_for_review(submission_id: str, user_name: st
         f"Please review and approve/reject this registration."
     )
     
-    await notify_admins(message, "new_registrations")
+    await notify_admins(message, "ready_for_review")
 
 async def notify_partner_delay(submission_id: str, user_name: str, missing_partners: list):
     """Notify admins about partner registration delays"""
@@ -1103,7 +844,7 @@ def update_admin_approved(submission_id: str, approved: bool = True):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data() 
         if not sheet_data:
             return False
         
@@ -1111,7 +852,7 @@ def update_admin_approved(submission_id: str, approved: bool = True):
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers) 
         
         submission_id_col = column_indices.get('submission_id')
         admin_approved_col = column_indices.get('admin_approved')
@@ -1127,7 +868,7 @@ def update_admin_approved(submission_id: str, approved: bool = True):
                 actual_row = row_index + 2
                 
                 # Convert column index to letter
-                admin_approved_col_letter = column_index_to_letter(admin_approved_col)
+                admin_approved_col_letter = sheets_service.column_index_to_letter(admin_approved_col)
                 
                 # Update the cell
                 range_name = f"{admin_approved_col_letter}{actual_row}"
@@ -1136,12 +877,7 @@ def update_admin_approved(submission_id: str, approved: bool = True):
                     'values': [['TRUE' if approved else 'FALSE']]
                 }
                 
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body=body
-                ).execute()
+                result = sheets_service.update_range(range_name, body)
                 
                 print(f"✅ Admin approval updated for {submission_id}: {approved}")
                 return True
@@ -1161,7 +897,7 @@ def update_partner_complete(submission_id: str, partner_complete: bool = True):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data() 
         if not sheet_data:
             return False
         
@@ -1169,7 +905,7 @@ def update_partner_complete(submission_id: str, partner_complete: bool = True):
         rows = sheet_data['rows']
         
         # Find column indices using the helper function
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         partner_complete_col = column_indices.get('partner_complete')
@@ -1186,17 +922,12 @@ def update_partner_complete(submission_id: str, partner_complete: bool = True):
                 sheet_row = row_index + 4
                 
                 # Convert column index to letter using proper function
-                col_letter = column_index_to_letter(partner_complete_col)
+                col_letter = sheets_service.column_index_to_letter(partner_complete_col) 
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell with TRUE/FALSE
                 value = "TRUE" if partner_complete else "FALSE"
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[value]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, value)
                 
                 print(f"✅ Updated Partner Complete to {value} for submission {submission_id}")
                 return True
@@ -1221,11 +952,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_submissions[user_id] = submission_id
         
         # Get status data (from Google Sheets or mock data)
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
         
         if status_data:
             # Link the Telegram User ID to the submission in Google Sheets
-            update_telegram_user_id(submission_id, user_id)
+            await sheets_service.update_telegram_user_id(submission_id, user_id)
             
             # TASK: new registers - automatically mark them as 'Form Complete' TRUE
             # If I have a record, that means they filled out the form
@@ -1240,11 +971,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Check if there's payment data in the paid column and auto-update payment_complete
             if sheets_service:
                 try:
-                    sheet_data = get_sheet_data()
+                    sheet_data = sheets_service.get_sheet_data()  
                     if sheet_data:
                         headers = sheet_data['headers']
                         rows = sheet_data['rows']
-                        column_indices = get_column_indices(headers)
+                        column_indices = sheets_service.get_column_indices(headers) 
                         
                         submission_id_col = column_indices.get('submission_id')
                         paid_col = column_indices.get('paid')
@@ -1299,11 +1030,11 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get status data from Google Sheets - try submission ID first, then Telegram User ID
     status_data = None
     if submission_id:
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
     
     if not status_data:
         # Try to find by Telegram User ID in the sheet
-        status_data = get_status_data(telegram_user_id=user_id)
+        status_data = await get_status_data(telegram_user_id=user_id)
     
     if not status_data:
         # Use Telegram user's language if available, otherwise default to English
@@ -1328,11 +1059,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_data = None
     
     if submission_id:
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
     
     if not status_data:
         # Try to find by Telegram User ID in the sheet
-        status_data = get_status_data(telegram_user_id=user_id)
+        status_data = await get_status_data(telegram_user_id=user_id)
     
     # Determine language
     if status_data and 'language' in status_data:
@@ -1443,11 +1174,11 @@ async def remind_partner(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get status data from Google Sheets
     status_data = None
     if submission_id:
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
     
     if not status_data:
         # Try to find by Telegram User ID in the sheet
-        status_data = get_status_data(telegram_user_id=user_id)
+        status_data = await get_status_data(telegram_user_id=user_id)
     
     if not status_data:
         # Use Telegram user's language if available, otherwise default to English
@@ -1572,11 +1303,11 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Get status data from Google Sheets
     status_data = None
     if submission_id:
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
     
     if not status_data:
         # Try to find by Telegram User ID in the sheet
-        status_data = get_status_data(telegram_user_id=user_id)
+        status_data = await get_status_data(telegram_user_id=user_id)
     
     if not status_data:
         # Use Telegram user's language if available, otherwise default to English
@@ -1643,14 +1374,14 @@ async def admin_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()    
         if not sheet_data:
             await update.message.reply_text("❌ No registration data found.")
             return
         
         headers = sheet_data['headers']
         rows = sheet_data['rows']
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers) 
         
         # Calculate statistics
         stats = {
@@ -1741,7 +1472,7 @@ async def admin_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if success:
         # Get user data to send notification
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id) 
         if status_data and status_data.get('telegram_user_id'):
             try:
                 user_language = status_data.get('language', 'en')
@@ -1788,7 +1519,7 @@ async def admin_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if success:
         # Get user data to send notification
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id) 
         if status_data and status_data.get('telegram_user_id'):
             try:
                 user_language = status_data.get('language', 'en')
@@ -1829,7 +1560,7 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     submission_id = context.args[0]
-    status_data = get_status_data(submission_id=submission_id)
+    status_data = await get_status_data(submission_id=submission_id) 
     
     if not status_data:
         await update.message.reply_text(f"❌ Registration {submission_id} not found.")
@@ -1887,13 +1618,13 @@ async def send_weekly_admin_digest():
         return
     
     try:
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data()
         if not sheet_data:
             return
         
         headers = sheet_data['headers']
         rows = sheet_data['rows']
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         # Count registrations by status
         stats = {
@@ -2024,14 +1755,14 @@ class ReminderScheduler:
         print("🔔 Checking for pending reminders...")
         
         # Get all sheet data
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data() 
         if not sheet_data:
             print("⚠️  No sheet data available for reminder checking")
             return
         
         headers = sheet_data['headers']
         rows = sheet_data['rows']
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         # Counters for efficiency tracking
         total_users = 0
@@ -2326,7 +2057,7 @@ GET_TO_KNOW_QUESTIONS = {
     'he': {
         'first_question': "אשמח לשמוע עליך קצת.\nקצת מי אתה, קצת על הניסיון שלך עם אירועים מהסוג הזה, קצת משהו מגניב עליך 😃",
         'followup_question': "אשמח לשמוע משהו מגניב ומעניין עליך. לא חובה (ואף רצוי) לא מתוך העולם האלטרנטיבי.",
-        'completion_message': "🎉 תודה על השיתוף! זה עוזר לנו ליצור סביבה בטוחה ונוחה לכולם.",
+        'completion_message': "🎉 תודה על השיתוף! תשובתך נשמרה, מנהלת הליין תעבור עליה בהקדם ונחזיר לך תשובה בהקדם.",
         'already_completed': "✅ כבר השלמת את חלק ההיכרות!",
         'no_registration': "אנא קשר את ההרשמה שלך קודם עם /start"
     },
@@ -2508,7 +2239,7 @@ async def get_to_know_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     submission_id = user_submissions.get(user_id)
     if not submission_id:
         # Try to find by Telegram User ID
-        status_data = get_status_data(telegram_user_id=user_id)
+        status_data = await get_status_data(telegram_user_id=user_id)
         if status_data:
             submission_id = status_data.get('submission_id')
             user_submissions[user_id] = submission_id
@@ -2517,7 +2248,7 @@ async def get_to_know_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("אנא קשר את ההרשמה שלך קודם עם /start")
         return
     
-    status_data = get_status_data(submission_id=submission_id)
+    status_data = await get_status_data(submission_id=submission_id)
     if not status_data:
         await update.message.reply_text("לא הצלחתי למצוא את ההרשמה שלך.")
         return
@@ -2603,7 +2334,7 @@ async def complete_get_to_know_flow(update: Update, user_id: str):
         await update.message.reply_text(GET_TO_KNOW_QUESTIONS[language]['completion_message'])
         
         # Continue with next steps
-        status_data = get_status_data(submission_id=submission_id)
+        status_data = await get_status_data(submission_id=submission_id)
         if status_data:
             await continue_conversation(update, None, status_data)
     else:
@@ -2625,7 +2356,7 @@ def store_get_to_know_response(submission_id: str, response: str):
     
     try:
         # Get current data to find the row
-        sheet_data = get_sheet_data()
+        sheet_data = sheets_service.get_sheet_data() 
         if not sheet_data:
             return False
         
@@ -2633,7 +2364,7 @@ def store_get_to_know_response(submission_id: str, response: str):
         rows = sheet_data['rows']
         
         # Find column indices
-        column_indices = get_column_indices(headers)
+        column_indices = sheets_service.get_column_indices(headers)
         
         submission_id_col = column_indices.get('submission_id')
         if submission_id_col is None:
@@ -2658,16 +2389,11 @@ def store_get_to_know_response(submission_id: str, response: str):
                 sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
                 
                 # Convert column index to letter
-                col_letter = column_index_to_letter(get_to_know_response_col)
+                col_letter = sheets_service.column_index_to_letter(get_to_know_response_col)
                 range_name = f"managed!{col_letter}{sheet_row}"
                 
                 # Update the cell
-                result = sheets_service.spreadsheets().values().update(
-                    spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                    range=range_name,
-                    valueInputOption='RAW',
-                    body={'values': [[response]]}
-                ).execute()
+                result = sheets_service.update_range(range_name, response)
                 
                 print(f"✅ Stored get-to-know response for submission {submission_id}")
                 return True
@@ -2724,33 +2450,9 @@ if __name__ == '__main__':
     
     # NEW TASK 3: Define Sheet1 monitoring functions before they are used
     
-    def get_sheet1_data():
-        """Fetch data from Sheet1 (original form responses)"""
-        if not sheets_service:
-            return None
-        
-        try:
-            result = sheets_service.spreadsheets().values().get(
-                spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                range="Sheet1!A1:ZZ1000"  # Get all data from Sheet1
-            ).execute()
-            
-            values = result.get('values', [])
-            if not values:
-                return None
-                
-            # First row should be headers
-            headers = values[0] if values else []
-            rows = values[1:] if len(values) > 1 else []
-            
-            return {'headers': headers, 'rows': rows}
-        except Exception as e:
-            print(f"❌ Error reading Sheet1: {e}")
-            return None
-
     def get_managed_sheet_data():
         """Fetch data from managed sheet"""
-        return get_sheet_data()  # This already reads from managed sheet
+        return sheets_service.get_sheet_data()  # This already reads from managed sheet
 
     def duplicate_to_managed_sheet(row_data, sheet1_headers):
         """Duplicate a row from Sheet1 to the managed sheet"""
@@ -2770,17 +2472,12 @@ if __name__ == '__main__':
             
             # Prepare the row data for insertion
             # Map Sheet1 columns to managed sheet columns
-            mapped_row = map_sheet1_to_managed(row_data, sheet1_headers)
+            # mapped_row = map_sheet1_to_managed(row_data, sheet1_headers)
             
             # Insert the row
-            range_name = f"managed!A{next_row}:ZZ{next_row}"
+            range_name = f"managed!M{next_row}:ZZ{next_row}"
             
-            result = sheets_service.spreadsheets().values().update(
-                spreadsheetId=GOOGLE_SHEETS_SPREADSHEET_ID,
-                range=range_name,
-                valueInputOption='RAW',
-                body={'values': [mapped_row]}
-            ).execute()
+            result = sheets_service.update_range(range_name, row_data)
             
             print(f"✅ Duplicated new registration to managed sheet at row {next_row}")
             return True
@@ -2821,7 +2518,7 @@ if __name__ == '__main__':
         print("🔍 Checking for new registrations in Sheet1...")
         
         # Get Sheet1 data
-        sheet1_data = get_sheet1_data()
+        sheet1_data = sheets_service.get_sheet1_data()
         if not sheet1_data:
             print("⚠️  Could not access Sheet1")
             return
@@ -2835,7 +2532,7 @@ if __name__ == '__main__':
         # Find submission IDs that exist in managed sheet
         managed_submission_ids = set()
         managed_headers = managed_data['headers']
-        managed_column_indices = get_column_indices(managed_headers)
+        managed_column_indices = sheets_service.get_column_indices(managed_headers)
         submission_id_col = managed_column_indices.get('submission_id')
         
         if submission_id_col is not None:
@@ -2881,23 +2578,9 @@ if __name__ == '__main__':
 
     async def notify_admin_new_registration(submission_id, row_data, sheet1_headers):
         """Notify admin about new registration"""
-        # Get admin user IDs (you'll need to configure this)
-        admin_user_ids = [
-            # Add your admin Telegram user IDs here
-            # "123456789",  # Your admin user ID
-        ]
-        
-        if not admin_user_ids:
-            print("⚠️  No admin user IDs configured for notifications")
-            return
-        
         # Extract name from row data
-        name = "Unknown"
-        for i, header in enumerate(sheet1_headers):
-            if 'שם מלא' in header and i < len(row_data):
-                name = row_data[i]
-                break
-        
+        name = extract_name(row_data, sheet1_headers)
+                
         # Create notification message
         message = (
             f"🆕 **New Registration Alert**\n\n"
@@ -2908,15 +2591,16 @@ if __name__ == '__main__':
         )
         
         # Send notification to each admin
-        for admin_id in admin_user_ids:
-            try:
-                # You'll need to initialize the bot context properly for this
-                # This is a simplified version - you may need to adjust based on your bot setup
-                app = ApplicationBuilder().token(BOT_TOKEN).build()
-                await app.bot.send_message(chat_id=admin_id, text=message)
-                print(f"✅ Notified admin {admin_id} about new registration: {submission_id}")
-            except Exception as e:
-                print(f"❌ Error notifying admin {admin_id}: {e}")
+        await notify_admins(message, 'new_registration')
+    
+    # Extract name from row data
+    def extract_name(row_data, sheet1_headers):
+        name = "Unknown"
+        for i, header in enumerate(sheet1_headers):
+            if 'שם מלא' in header and i < len(row_data):
+                name = row_data[i]
+                break
+        return name
     
     # NEW TASK 3: Set up periodic monitoring for Sheet1 -> managed duplication
     async def periodic_sheet_monitoring():

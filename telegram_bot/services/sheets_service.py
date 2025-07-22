@@ -11,7 +11,10 @@ class SheetsService:
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
         self.range_name = settings.google_sheets_range
         
-    def _column_index_to_letter(self, col_index: int) -> str:
+        # --- Column Indices ---
+        self.column_indices = self.get_column_indices()
+
+    def column_index_to_letter(self, col_index: int) -> str:
         """Convert a column index (0-based) to Excel column letter format (A, B, ..., Z, AA, AB, ...)"""
         result = ""
         while col_index >= 0:
@@ -42,7 +45,37 @@ class SheetsService:
         except Exception as e:
             raise SheetsConnectionException(f"Error reading Google Sheets: {e}")
 
-    def get_column_indices(self, headers: List[str]) -> Dict[str, int]:
+    def get_sheet1_data(self) -> Optional[Dict[str, List]]:
+        """Fetch all data from the Google Sheets"""
+        if not self.spreadsheet:
+            raise SheetsConnectionException("Google Sheets service not available")
+        
+        try:
+            result = self.spreadsheet.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range="Sheet1!A1:ZZ1000"
+            ).execute()
+            
+            values = result.get('values', [])
+            if not values:
+                return None
+                
+            # First row should be headers
+            headers = values[0] if values else []
+            rows = values[1:] if len(values) > 1 else []
+            
+            return {'headers': headers, 'rows': rows}
+        except Exception as e:
+            raise SheetsConnectionException(f"Error reading Google Sheets: {e}")
+
+    def get_column_indices(self, headers: List[str] = None) -> Dict[str, int]:
+        if headers is None:
+            sheet_data = self.get_sheet_data()
+            if not sheet_data:
+                return None
+        
+            headers = sheet_data['headers']
+        
         """Get column indices for all important fields from headers"""
         # TODO use a dictionary instead of a list
         column_indices = {}
@@ -388,3 +421,42 @@ class SheetsService:
         except Exception as e:
             print(f"❌ Error updating cancellation status: {e}")
             return False 
+        
+    def get_cell_value(self, row: List[str], key: str, default: str = "") -> str:
+        index = self.column_indices.get(key)
+        if index is not None and index < len(row):
+            return row[index]
+        return default
+    
+    def get_boolean_value(self, row: List[str], key: str, default: bool = False) -> bool:
+        """Get a boolean value from the sheet, handling various formats"""
+        value = self.get_cell_value(row, key, "").strip().upper()
+        if value in ['TRUE', 'YES', 'כן', '1', 'V', '✓']:
+            return True
+        elif value in ['FALSE', 'NO', 'לא', '0', '', 'X']:
+            return False
+        return default
+    
+    def get_language_preference(self, row: List[str]) -> str:
+        """Determine language preference from form response"""
+        language_response = self.get_cell_value(row, 'language_preference')
+
+        if not language_response:
+            return 'en'  # Default to English
+        
+        response_lower = language_response.lower().strip()
+        if 'עברית' in response_lower or 'hebrew' in response_lower:
+            return 'he'
+        elif 'אנגלית' in response_lower or 'english' in response_lower:
+            return 'en'
+        else:
+            return 'en'  # Default to English
+
+    def update_range(self, range_name: str, value: str) -> bool:    
+        result = self.spreadsheet.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=range_name,
+            valueInputOption='RAW',
+            body={'values': [[value]]}
+        ).execute()
+        return result
