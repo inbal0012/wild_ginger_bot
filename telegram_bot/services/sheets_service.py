@@ -11,6 +11,12 @@ class SheetsService:
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
         self.range_name = settings.google_sheets_range
         
+        self.user_headers = self.parse_sheet_headers("Users")
+        self.event_headers = self.parse_sheet_headers("Events")
+        self.registration_headers = self.parse_sheet_headers("Registrations")
+        self.group_headers = self.parse_sheet_headers("Groups")
+
+        
         # --- Column Indices ---
         self.column_indices = self.get_column_indices()
 
@@ -24,6 +30,7 @@ class SheetsService:
     
     def get_sheet_data(self) -> Optional[Dict[str, List]]:
         """Fetch all data from the Google Sheets"""
+        return self.get_data_from_sheet("Old_Registrations")
         if not self.spreadsheet:
             raise SheetsConnectionException("Google Sheets service not available")
         
@@ -44,6 +51,37 @@ class SheetsService:
             return {'headers': headers, 'rows': rows}
         except Exception as e:
             raise SheetsConnectionException(f"Error reading Google Sheets: {e}")
+
+    def get_data_from_sheet(self, sheet_name: str) -> Optional[Dict[str, List]]:
+        """Fetch all data from the Google Sheets"""
+        if not self.spreadsheet:
+            raise SheetsConnectionException("Google Sheets service not available")
+        
+        try:
+            target_sheet = self.spreadsheet.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{sheet_name}!A1:ZZ1000"
+            ).execute()
+            
+            values = target_sheet.get('values', [])
+            if not values:
+                return None
+                
+            # First row should be headers
+            headers = values[0] if values else []
+            rows = values[1:] if len(values) > 1 else []
+            
+            return {'headers': headers, 'rows': rows}
+        except Exception as e:
+            raise SheetsConnectionException(f"Error reading Google Sheets: {e}")
+
+    def parse_sheet_headers(self, sheet_name: str) -> Dict[str, int]:
+        """Parse the headers of a sheet"""
+        sheet_data = self.get_data_from_sheet(sheet_name)
+        if not sheet_data:
+            return None
+        # return sheet_data['headers']
+        return {value: index for index, value in enumerate(sheet_data['headers'])}
 
     def get_sheet1_data(self) -> Optional[Dict[str, List]]:
         """Fetch all data from the Google Sheets"""
@@ -460,3 +498,21 @@ class SheetsService:
             body={'values': [[value]]}
         ).execute()
         return result
+    
+    async def append_row(self, sheet_name: str, row: List[str]) -> bool:
+        """Append a new row to the sheet"""
+        try:
+            result = self.spreadsheet.spreadsheets().values().append(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{sheet_name}!A1",
+                valueInputOption='RAW',
+                insertDataOption='INSERT_ROWS',
+                body={'values': [row]}
+            ).execute()
+            return result
+        except Exception as e:
+            print(f"❌ Error appending row: {e}")
+            return False
+    
+    
+    

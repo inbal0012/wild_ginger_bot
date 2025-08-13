@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import logging
 
 from telegram_bot.services.sheets_service import SheetsService
+from telegram_bot.services.user_service import UserService
+from telegram_bot.services.message_service import MessageService
+from telegram_bot.models.user import CreateUserFromTelegramDTO
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,13 +20,62 @@ logging.basicConfig(
 class WildGingerBot:
     def __init__(self):
         self.sheets_service = SheetsService()
+        self.user_service = UserService(self.sheets_service)
+        self.message_service = MessageService()
     
+    def get_user_from_update(self, update: Update):
+        user = update.effective_user
+        return str(user.id)        
+    
+    async def start_new_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        
+        # create new user in the sheet
+        await self.create_new_user(user)
+        
+        # TODO: send welcome message
+        # TODO multi language support
+        await update.message.reply_text(
+            f"Hi {user['first_name']}! nice to meet you!"
+        )
+        
+        # TODO: start the form flow
+        
+    async def create_new_user(self, user: User):
+        user_id = str(user.id)                
+
+        # create new user in the sheet
+        new_user = CreateUserFromTelegramDTO(
+            full_name=user['first_name'],
+            telegram_user_id=user_id,
+            telegram_username=user['username'],
+            language=user['language_code']
+        )
+        result = await self.user_service.create_new_user(new_user)
+        if result:
+            print(f"👋 User {user_id} created successfully")
+        else:
+            print(f"❌ Error creating user {user_id} in the sheet")
+        
     # --- /start command handler ---
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        user_id = str(user.id)
+        user_id = self.get_user_from_update(update)
+        
         print(f"👋 User {user_id} started the bot")
         
+        # search if user is already in the sheet
+        user_data = self.user_service.find_user_by_telegram_id(user_id)
+        if user_data:
+            print(f"👋 User {user_id} is already in the sheet")
+            await update.message.reply_text(
+                # f"Hi {user['first_name']}! how are you?"
+                self.message_service.get_message(user_data[self.user_service.headers['language']], 'welcome', name=user_data[self.user_service.headers['full_name']])
+            )
+            # TODO
+
+        else:
+            await self.start_new_user(update, context)
+
         #TODO         
         return
         # Start the form flow
@@ -139,8 +191,7 @@ class WildGingerBot:
 
     # --- /help command handler ---
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user = update.effective_user
-        user_id = str(user.id)
+        user_id = self.get_user_from_update(update)
         print(f"👋 User {user_id} checked help")
         
         # TODO
