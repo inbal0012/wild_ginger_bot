@@ -1,4 +1,4 @@
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, User
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application
 import os
 from dotenv import load_dotenv
@@ -9,6 +9,7 @@ from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
 from telegram_bot.models.user import CreateUserFromTelegramDTO
 from telegram_bot.services.form_flow_service import FormFlowService
+from telegram_bot.services.file_storage_service import FileStorageService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,6 +25,7 @@ class WildGingerBot:
         self.user_service = UserService(self.sheets_service)
         self.message_service = MessageService()
         self.form_flow_service = FormFlowService(self.sheets_service)
+        self.file_storage = FileStorageService()
     
     def get_user_from_update(self, update: Update):
         user = update.effective_user
