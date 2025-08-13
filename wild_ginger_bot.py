@@ -8,6 +8,7 @@ from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
 from telegram_bot.models.user import CreateUserFromTelegramDTO
+from telegram_bot.services.form_flow_service import FormFlowService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +23,7 @@ class WildGingerBot:
         self.sheets_service = SheetsService()
         self.user_service = UserService(self.sheets_service)
         self.message_service = MessageService()
+        self.form_flow_service = FormFlowService(self.sheets_service)
     
     def get_user_from_update(self, update: Update):
         user = update.effective_user
@@ -40,6 +42,9 @@ class WildGingerBot:
         )
         
         # TODO: start the form flow
+        result = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
+        
+        print(f"👋 Form flow result: {result}")
         
     async def create_new_user(self, user: User):
         user_id = str(user.id)                
