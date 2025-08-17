@@ -7,7 +7,7 @@ from telegram_bot.models.user import CreateUserFromTelegramDTO
 class UserService:
     def __init__(self, sheets_service: SheetsService):
         self.sheets_service = sheets_service
-        self.headers = self.sheets_service.parse_sheet_headers("Users")
+        self.headers = self.sheets_service.headers["Users"]
 
     def get_user_by_telegram_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
         sheet_data = self.sheets_service.get_data_from_sheet("Users")
@@ -18,7 +18,7 @@ class UserService:
         headers = sheet_data['headers']
         rows = sheet_data['rows']
         
-        telegram_user_id_col = self.sheets_service.user_headers['telegram_user_id']
+        telegram_user_id_col = self.headers['telegram_user_id']
         
         for i, row in enumerate(rows):            
             if row and row[telegram_user_id_col] == str(telegram_user_id):

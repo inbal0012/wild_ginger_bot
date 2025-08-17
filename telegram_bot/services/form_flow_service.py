@@ -103,6 +103,7 @@ class FormFlowService(BaseService):
         self.file_storage = FileStorageService()
         self.user_service = UserService(sheets_service)
         self.event_service = EventService(sheets_service)
+        self.registration_service = RegistrationService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
             

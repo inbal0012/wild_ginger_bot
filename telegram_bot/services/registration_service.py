@@ -6,7 +6,7 @@ from telegram_bot.models.registration import CreateRegistrationDTO, Registration
 class RegistrationService:
     def __init__(self, sheets_service: SheetsService):
         self.sheets_service = sheets_service
-        self.headers = self.sheets_service.parse_sheet_headers("Registrations")
+        self.headers = self.sheets_service.headers["Registrations"]
 
     # def find_registration_by_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
     #     sheet_data = self.sheets_service.get_data_from_sheet("Registrations")

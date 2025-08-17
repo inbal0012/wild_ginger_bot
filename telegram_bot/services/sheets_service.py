@@ -11,11 +11,12 @@ class SheetsService:
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
         self.range_name = settings.google_sheets_range
         
-        self.user_headers = self.parse_sheet_headers("Users")
-        self.event_headers = self.parse_sheet_headers("Events")
-        self.registration_headers = self.parse_sheet_headers("Registrations")
-        self.group_headers = self.parse_sheet_headers("Groups")
-
+        self.headers = {
+            "Users": self.parse_sheet_headers("Users"),
+            "Events": self.parse_sheet_headers("Events"),
+            "Registrations": self.parse_sheet_headers("Registrations"),
+            "Groups": self.parse_sheet_headers("Groups")
+        }
         
         # --- Column Indices ---
         self.column_indices = self.get_column_indices()
@@ -354,7 +355,7 @@ class SheetsService:
                     sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
                     
                     col_letter = self._column_index_to_letter(target_col)
-                    range_name = f"managed!{col_letter}{sheet_row}"
+                    range_name = f"Old_Registrations!{col_letter}{sheet_row}"
                     
                     result = self.spreadsheet.spreadsheets().values().update(
                         spreadsheetId=self.spreadsheet_id,
@@ -390,9 +391,7 @@ class SheetsService:
             
             headers = sheet_data['headers']
             rows = sheet_data['rows']
-            
-            # column_indices = self.user_headers(headers)
-            
+                        
             id_col = self.headers[sheet_name][id_column]
             target_col = self.headers[sheet_name][column_key]
             
