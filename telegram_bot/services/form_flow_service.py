@@ -4,6 +4,7 @@ Handles step-by-step form progression, state management, and validation.
 """
 
 import asyncio
+import re
 from typing import Any, Dict, List, Optional, Union, Tuple
 from enum import Enum
 from .base_service import BaseService
@@ -45,6 +46,8 @@ class FormState:
         
         if (step == "event_selection"):
             self.event_id = answer
+        elif step == "language":
+            self.language = answer
         elif (step == "would_you_like_to_register" and answer == "no"):
             self.completed = True
     
@@ -274,7 +277,7 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Registrations",
                 order=8,
-                placeholder=Text(he="https://t.me/username", en="https://t.me/username"),
+                placeholder=Text(he="https://t.me/username Or @username", en="https://t.me/username Or @username"),
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
@@ -286,6 +289,10 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא הזן לינק לטלגרם", en="Please enter Telegram link")
                     ),
+                    ValidationRule(
+                        rule_type=ValidationRuleType.TELEGRAM_LINK,
+                        error_message=Text(he="הלינק אינו תקין. אנא הזן לינק תקין לטלגרם\nhttps://t.me/username Or @username", en="Invalid link. Please enter a valid Telegram link\nhttps://t.me/username Or @username")
+                    )
                 ]
             ),
             # 9. last_sti_test
@@ -1247,6 +1254,13 @@ class FormFlowService(BaseService):
                         return {
                             "valid": False,
                             "message": rule.error_message.get(form_state.language, "Too long")
+                        }
+                elif rule.rule_type == ValidationRuleType.TELEGRAM_LINK:
+                    # https://t.me/username OR @username
+                    if not re.match(r'^https?://t\.me/[a-zA-Z0-9_]+$', answer) and not re.match(r'^@[a-zA-Z0-9_]+$', answer):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Invalid Telegram link")
                         }
             
             return {"valid": True, "message": ""}
