@@ -442,7 +442,7 @@ class FormFlowService(BaseService):
             # 14. bdsm_experience
             "bdsm_experience": QuestionDefinition(
                 question_id="bdsm_experience",
-                question_type=QuestionType.SELECT,
+                question_type=QuestionType.MULTI_SELECT,
                 title=Text(he="מה רמת הניסיון שלך ב-BDSM?", en="What is your BDSM experience level?"),
                 required=True,
                 save_to="Users",
@@ -634,14 +634,20 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Users",
                 order=22,
-                placeholder=Text(he="תרשמו במילים שלכם", en="Write in your own words"),
+                placeholder=Text(he=f"תרשמו במילים שלכם\n{skip.he}", en=f"Write in your own words\n{skip.en}"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
                         params={"max": 200},
                         error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no")
+                    ]
+                )
             ),
             # 23 preferences_text
             "preferences_text": QuestionDefinition(
@@ -651,14 +657,20 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Users",
                 order=23,
-                placeholder=Text(he="תרשמו במילים שלכם", en="Write in your own words"),
+                placeholder=Text(he=f"תרשמו במילים שלכם\n{skip.he}", en=f"Write in your own words\n{skip.en}"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
                         params={"max": 200},
                         error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no")
+                    ]
+                )
             ),
             # 24 bdsm_comments
             "bdsm_comments": QuestionDefinition(
@@ -715,15 +727,15 @@ class FormFlowService(BaseService):
             # 27 alcohol_in_event
             "alcohol_in_event": QuestionDefinition(
                 question_id="alcohol_in_event",
-                question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם תרצה אלכוהול באירוע?", en="Would you like alcohol at the event?"),
+                question_type=QuestionType.SELECT,
+                title=Text(he="האם תרצה אלכוהול באירוע (בתוספת תשלום)?", en="Would you like alcohol at the event (with additional payment)?"),
                 required=True,
                 save_to="Registrations",
                 order=27,
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
+                    QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe")),
                     QuestionOption(value="no", text=Text(he="לא", en="No")),
-                    QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe"))
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -740,30 +752,26 @@ class FormFlowService(BaseService):
                 required=False,
                 save_to="Users",
                 order=28,
+                placeholder=Text(he=f"{skip.he}", en=f"{skip.en}"),
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
                         SkipConditionItem(type="field_value", field="alcohol_in_event", operator="equals", value="no")
                     ]
-                ),
-                validation_rules=[
-                    ValidationRule(
-                        rule_type=ValidationRuleType.REQUIRED,
-                        error_message=Text(he="אנא בחר אופציה", en="Please select an option")
-                    )
-                ]
+                )
             ),
             # 29 agree_participant_commitment
             "agree_participant_commitment": QuestionDefinition(
                 question_id="agree_participant_commitment",
-                question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מסכמ/ת את הפרשנות?", en="Do you agree to the terms?"),
+                question_type=QuestionType.SELECT,
+                title=Text(he="האם זה מובן?", en="Do you agree to the terms?"),
                 required=True,
                 save_to="Registrations",
                 order=29,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="yes", text=Text(he="הבנתי את הכתוב ומה שמצופה ממני כמשתתפ/ת. אני מסכימ/ה ומאשר/ת", en="Yes")),
+                    QuestionOption(value="no", text=Text(he="לא הבנתי או אני לא בטוח/ה שהבנתי מה מצופה ממני כמשתתפ/ת באירוע", en="No")),
+                    QuestionOption(value="else", text=Text(he="אחר - נחזור אליך כדי לברר", en="No"))
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -776,13 +784,13 @@ class FormFlowService(BaseService):
             "enthusiastic_verbal_consent_commitment": QuestionDefinition(
                 question_id="enthusiastic_verbal_consent_commitment",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מסכמ/ת את הפרשנות?", en="Do you agree to the terms?"),
+                title=Text(he="האם זה ברור שיש לקבל הסכמה מפורשת לכל מגע ואינטראקציה עם אדם אחר?", en="Do you agree to the terms?"),
                 required=True,
                 save_to="Registrations",
                 order=30,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="yes", text=Text(he="ברור בהחלט", en="Yes")),
+                    QuestionOption(value="no", text=Text(he="לא ברור לי, אשמח להבהרה", en="No"))
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -794,11 +802,26 @@ class FormFlowService(BaseService):
             # 31 agree_line_rules
             "agree_line_rules": QuestionDefinition(
                 question_id="agree_line_rules",
-                question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מסכמ/ת את הפרשנות?", en="Do you agree to the terms?"),
+                question_type=QuestionType.TEXT,
+                title=Text(he="האם קראת את חוקי הליין ואתה מאשר אותם?", en="Do you agree to the line rules?"),
                 required=True,
                 save_to="Registrations",
                 order=31,
+                validation_rules=[
+                    ValidationRule(
+                        rule_type=ValidationRuleType.REQUIRED,
+                        error_message=Text(he="אנא קרא את חוקי הליין היטב ואשר אותם", en="Please read the line rules carefully and agree to them")
+                    )
+                ]
+            ),
+            # 32 agree_place_rules  
+            "agree_place_rules": QuestionDefinition(
+                question_id="agree_place_rules",
+                question_type=QuestionType.SELECT,
+                title=Text(he="האם קראת את חוקי המקום ואתה מאשר אותם?", en="Do you agree to the place rules?"),
+                required=False,
+                save_to="Registrations",
+                order=32,
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
@@ -810,16 +833,19 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
-            # 32 wants_to_helper
+            # 33 wants_to_helper
             "wants_to_helper": QuestionDefinition(
                 question_id="wants_to_helper",
                 question_type=QuestionType.BOOLEAN,
                 title=Text(he="האם אתה/את מעוניין/ת לעזור באירוע?", en="Do you want to help at the event?"),
                 required=True,
                 save_to="Registrations",
-                order=32,
+                order=33,
+                placeholder=Text(he=f'על מנת להרים כזאת הפקה אנו זקוקות לעזרה. אם תוכל ותרצי נשמח שתבואו מוקדם / תשארו לעזור לנו לנקות אחרי בתמורה להנחה בעלות האירוע. הלפרים מקבלים 25% הנחה. ניתן לצבור ע"י בחירת שניהם. ', 
+                                 en=f"{skip.en}"),
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
+                    QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
                 ],
                 validation_rules=[
@@ -846,13 +872,19 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="wants_to_helper", operator="equals", value="no")
+                    ]
+                )
             ),
             # 34 is_surtified_DM
             "is_surtified_DM": QuestionDefinition(
                 question_id="is_surtified_DM",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מוכנ/ה להיות דמות מורשת?", en="Are you certified to be a DM?"),
+                title=Text(he="האם את/ה DM מוסמך?", en="Are you certified to be a DM?"),
                 required=True,
                 save_to="Users",
                 order=34,
@@ -871,12 +903,15 @@ class FormFlowService(BaseService):
             "wants_to_DM": QuestionDefinition(
                 question_id="wants_to_DM",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מעוניין/ת להיות דמות מורשת?", en="Do you want to be a DM?"),
+                title=Text(he="האם תרצו להצטרף לצוות ה-DM-ים?", en="Do you want to be a DM?"),
                 required=True,
                 save_to="Registrations",
                 order=35,
+                placeholder=Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
+                                 en=f"{skip.en}"),
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
+                    QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
                 ],
                 validation_rules=[
@@ -884,20 +919,25 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="is_surtified_DM", operator="equals", value="no")
+                    ]
+                )
             ),
             # 36 DM_shifts
             "DM_shifts": QuestionDefinition(
                 question_id="DM_shifts",
                 question_type=QuestionType.SELECT,
-                title=Text(he="מתי אתה/את מעוניין/ת להיות דמות מורשת?", en="When do you want to be a DM?"),
+                title=Text(he="איזה משמרות יכולות להתאים לך?", en="When do you want to be a DM?"),
                 required=True,
                 save_to="Registrations",
                 order=36,
-                options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
-                ],
+                placeholder=Text(he=f"אשתדל לאפשר לכל אחד את הבחירות שלו.", 
+                                 en=f"{skip.en}"),
+                options=self.parse_DM_shifts(),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -913,6 +953,16 @@ class FormFlowService(BaseService):
         
         return [QuestionOption(value=event.id, text=Text(he=f"{event.start_date} - {event.name} ({event.event_type})", en=f"{event.start_date} - {event.name} ({event.event_type})")) for event in events]
     
+    def parse_DM_shifts(self) -> List[QuestionOption]:
+        """Parse DM shifts from the sheets service."""
+        # TODO
+        return [
+            QuestionOption(value="first", text=Text(he="21:00-1:00", en="21:00-1:00")),
+            QuestionOption(value="second", text=Text(he="01:00-4:00", en="01:00-4:00")),
+        ]
+        
+        shifts = self.event_service.get_DM_shifts()
+        return [QuestionOption(value=shift.id, text=Text(he=f"{shift.start_date} - {shift.name}", en=f"{shift.start_date} - {shift.name}")) for shift in shifts]
     
     def get_active_forms(self) -> Dict[str, FormState]:
         """Get all active forms from file storage."""
