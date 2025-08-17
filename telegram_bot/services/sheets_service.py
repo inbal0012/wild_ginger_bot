@@ -373,6 +373,58 @@ class SheetsService:
             print(f"❌ Error updating {column_key}: {e}")
             return False
 
+
+    def update_user_cell(self, id: str, id_column: str, sheet_name: str, column_key: str, value: str) -> bool:
+        """Generic method to update a single cell"""
+        if not self.spreadsheet:
+            print("⚠️  Google Sheets not available")
+            return False
+        
+        try:
+            sheet_data = self.get_data_from_sheet(sheet_name)
+            if not sheet_data:
+                return False
+            
+            headers = sheet_data['headers']
+            rows = sheet_data['rows']
+            
+            # column_indices = self.user_headers(headers)
+            
+            id_col = self.headers[sheet_name][id_column]
+            target_col = self.headers[sheet_name][column_key]
+            
+            if id_col is None or target_col is None:
+                print(f"❌ Could not find required columns in Google Sheets")
+                return False
+            
+            # Find the row with the matching submission ID
+            for row_index, row in enumerate(rows):
+                if len(row) > id_col and row[id_col] == id:
+                    sheet_row = row_index + 2  # Adjust for header row and 0-based indexing
+                    
+                    col_letter = self.column_index_to_letter(target_col)
+                    range_name = f"Users!{col_letter}{sheet_row}"
+                    
+                    if len(value) > 1:
+                        value = ", ".join(value)
+                    
+                    result = self.spreadsheet.spreadsheets().values().update(
+                        spreadsheetId=self.spreadsheet_id,
+                        range=range_name,
+                        valueInputOption='RAW',
+                        body={'values': [[value]]}
+                    ).execute()
+                    
+                    print(f"✅ Updated {column_key} to {value} for user {id}")
+                    return True
+            
+            print(f"❌ Could not find user {id} in Google Sheets")
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error updating {column_key}: {e}")
+            return False
+
     async def update_telegram_user_id(self, submission_id: str, telegram_user_id: str) -> bool:
         """Update the Telegram User ID for a specific submission in Google Sheets"""
         return self._update_cell(submission_id, 'telegram_user_id', telegram_user_id)

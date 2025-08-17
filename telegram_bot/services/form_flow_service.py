@@ -1098,8 +1098,198 @@ class FormFlowService(BaseService):
             }
         } 
         
+    async def handle_poll_answer(self, question_field: str, user_id: str, selected_options: List[int]):
+        """Handle poll answer from Telegram."""
+        try:
+            # Get the form state for this user
+            form_state = self.active_forms.get(str(user_id))
+            if not form_state:
+                self.log_error(f"No active form found for user {user_id}")
+                return
+            
+            # Get the question definition
+            if question_field not in self.question_definitions:
+                self.log_error(f"Question field {question_field} not found in definitions")
+                return
+            
+            question_def = self.question_definitions[question_field]
+            
+            # Convert selected options to answer values
+            answer_values = []
+            for option_id in selected_options:
+                if option_id < len(question_def.options):
+                    answer_values.append(question_def.options[option_id].value)
+            
+            # For single select, take the first value
+            answer = answer_values[0] if len(answer_values) == 1 else answer_values
+            
+            # Validate the answer
+            validation_result = await self._validate_question_answer(question_def, answer, form_state)
+            if not validation_result["valid"]:
+                self.log_error(f"Validation failed for user {user_id}: {validation_result['message']}")
+                return
+            
+            # Update form state with the answer
+            form_state.update_answer(question_field, answer)
+            
+            # Save answer to the appropriate table
+            await self.save_answer_to_sheets(str(user_id), question_field, answer)
+            
+            # Save form state
+            self.save_active_forms()
+            
+            # Get next question or complete form
+            next_question = await self._get_next_question_for_field(question_field, form_state)
+            return next_question
+            
+        except Exception as e:
+            self.log_error(f"Error handling poll answer for user {user_id}: {e}")
+            return None
+    
+    
+    async def _validate_question_answer(self, question_def: QuestionDefinition, answer: Any, form_state: FormState) -> Dict[str, Any]:
+        """Validate answer for a specific question."""
+        try:
+            # Check if required
+            if question_def.required and (answer is None or answer == ""):
+                return {
+                    "valid": False,
+                    "message": question_def.validation_rules[0].error_message.get(form_state.language, "Required field")
+                }
+            
+            # Apply validation rules
+            for rule in question_def.validation_rules:
+                if rule.rule_type == ValidationRuleType.REQUIRED:
+                    if not answer or answer == "":
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Required field")
+                        }
+                
+                elif rule.rule_type == ValidationRuleType.MIN_LENGTH:
+                    if len(str(answer)) < rule.params.get("min", 0):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Too short")
+                        }
+                
+                elif rule.rule_type == ValidationRuleType.MAX_LENGTH:
+                    if len(str(answer)) > rule.params.get("max", 1000):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Too long")
+                        }
+            
+            return {"valid": True, "message": ""}
+            
+        except Exception as e:
+            self.log_error(f"Error validating answer: {e}")
+            return {"valid": False, "message": "Validation error"}
+    
+    async def _get_next_question_for_field(self, current_field: str, form_state: FormState) -> Optional[Dict[str, Any]]:
+        """Get the next question after answering a specific field."""
+        try:
+            # Get the order of the current field
+            current_question = self.question_definitions.get(current_field)
+            if not current_question:
+                return None
+            
+            current_order = current_question.order
+                        
+            if form_state.completed:
+                return await self._complete_form(form_state)
+            
+            # Find the next question in order
+            next_question = None
+            for field_name, question_def in self.question_definitions.items():
+                if question_def.order > current_order:
+                    # Check if this question should be skipped
+                    if not await self._should_skip_question(question_def, form_state):
+                        next_question = question_def
+                        break
+            
+            if next_question:
     
     def validate_telegram_username(self, username: str) -> Tuple[bool, str]:
+                return next_question
+            else:
+                # Form is complete
+                return await self._complete_form(form_state)
+                
+        except Exception as e:
+            self.log_error(f"Error getting next question: {e}")
+            return None
+    
+    
+    async def _should_skip_question(self, question_def: QuestionDefinition, form_state: FormState) -> bool:
+        """Check if a question should be skipped based on conditions."""
+        if not question_def.skip_condition:
+            return False
+        
+        try:
+            for condition in question_def.skip_condition.conditions:
+                if condition.type == "field_value":
+                    field_value = form_state.get_answer(condition.field)
+                    if condition.operator == "equals":
+                        if field_value == condition.value:
+                            return True
+                    elif condition.operator == "not_in":
+                        if field_value not in condition.value:
+                            return True
+                
+                elif condition.type == "user_exists":
+                    # Check if user exists in sheets
+                    user_data = self.user_service.get_user_by_telegram_id(form_state.user_id)
+                    if user_data:
+                        if user_data[self.user_service.headers[question_def.question_id]] == condition.value:
+                            return True
+                
+                elif condition.type == "event_type":
+                    # Check event type
+                    event_type = await self._get_event_type(form_state.event_id)
+                    if condition.operator == "equals" and event_type == condition.value:
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            self.log_error(f"Error checking skip condition: {e}")
+            return False
+    
+    async def save_answer_to_sheets(self, user_id: str, question_field: str, answer: Any) -> bool:
+        """
+        Save answer to the appropriate table based on the question's save_to field.
+        
+        Args:
+            user_id: User identifier
+            question_field: Question field name
+            answer: User's answer
+            
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        try:
+            # Get the question definition
+            question_def = self.question_definitions.get(question_field)
+            if not question_def:
+                self.log_error(f"Question definition not found for field {question_field}")
+                return False
+            
+            success = self.sheets_service.update_user_cell(user_id, question_field, answer)
+            
+            if success:
+                self.log_info(f"Saved answer for user {user_id}, field {question_field} to {question_def.save_to} table")
+            else:
+                self.log_error(f"Failed to save answer for user {user_id}, field {question_field} to {question_def.save_to} table")
+            
+            return success
+            
+        except Exception as e:
+            self.log_error(f"Error saving answer to sheets: {e}")
+            return False
+    
+    
+    async def validate_telegram_username(self, username: str) -> Tuple[bool, str]:
         """
         Validate Telegram username format.
         

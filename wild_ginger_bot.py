@@ -1,10 +1,11 @@
-from telegram import Update, BotCommand, User
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application
+from telegram import Update, BotCommand, User, PollAnswer
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, PollHandler
 import os
 from dotenv import load_dotenv
 import logging
 
 from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, QuestionOption
+from telegram_bot.models.TelegramPollFields import TelegramPollFields, TelegramPollData
 
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.services.user_service import UserService
@@ -30,6 +31,7 @@ class WildGingerBot:
         self.message_service = MessageService()
         self.form_flow_service = FormFlowService(self.sheets_service)
         self.file_storage = FileStorageService()
+        self.poll_data = self.load_poll_data()
     
     def get_user_from_update(self, update: Update):
         user = update.effective_user
@@ -235,6 +237,144 @@ class WildGingerBot:
 
         # Set up command autocomplete for better user experience
     
+    async def handle_poll_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle poll answer updates"""
+        poll_answer = update.poll_answer
+        poll_id = poll_answer.poll_id
+        user_id = poll_answer.user.id
+        selected_options = poll_answer.option_ids
+        
+        if poll_id not in self.poll_data:
+            return
+        
+        self.update_poll_data(poll_answer)
+        
+        # Save to storage after vote update
+        self.save_poll_data(self.poll_data)
+        
+        # The FormFlowService will handle saving to the appropriate table
+        # based on the save_to field in the question definition
+        
+        poll_info = self.poll_data[poll_id]
+        # Handle the poll answer in the form flow service
+        next_question = await self.form_flow_service.handle_poll_answer(poll_info['question_field'], str(user_id), selected_options)
+        if next_question:
+            await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))
+        else:
+            print(f"👋 User {user_id} completed the form")
+    
+    
+    def get_language_from_user(self, user_id: str):
+        user_data = self.user_service.get_user_by_telegram_id(user_id)
+        if user_data:
+            return user_data[self.user_service.headers['language']]
+        else:
+            return 'en'
+    
+    async def send_question_as_telegram_message(self, question: QuestionDefinition, language: str, user_id: str):
+        if question.question_type  in (QuestionType.BOOLEAN, QuestionType.SELECT, QuestionType.MULTI_SELECT): # == QuestionType.MULTI_SELECT or question.question_type == QuestionType.SELECT:
+            # TODO: create a telegram message with the question
+            return await self.send_telegram_poll(question, language, user_id)
+        else: # if question.question_type == QuestionType.TEXT or question.question_type == QuestionType.DATE:
+            # TODO: create a telegram message with the question
+            return await self.send_telegram_text_message(question, language, user_id)
+        
+    async def send_telegram_text_message(self, question: QuestionDefinition, language: str, user_id: str):
+        # Create a text message with the question
+        question_text = question.title.he if language == "he" else question.title.en
+        
+        # Add placeholder if available
+        if question.placeholder:
+            placeholder_text = question.placeholder.he if language == "he" else question.placeholder.en
+            message = f"{question_text}\n\n{placeholder_text}"
+        else:
+            message = question_text
+            
+        await self.app.bot.send_message(user_id, message)
+    
+    async def send_telegram_poll(self, question_field: QuestionDefinition, language: str, user_id: str):
+        # TODO: create a telegram poll with the question
+        poll_fields = TelegramPollFields(
+            # id=question_field.question_id,
+            question=question_field.title.get(language),
+            options=self.parse_poll_options(question_field.options, language),
+            is_anonymous=False,
+            allows_multiple_answers=question_field.question_type == QuestionType.MULTI_SELECT
+        )
+        
+        message = await self.app.bot.send_poll(
+            chat_id=user_id,
+            question=poll_fields.question,
+            options=poll_fields.options,
+            is_anonymous=poll_fields.is_anonymous,
+            allows_multiple_answers=poll_fields.allows_multiple_answers
+        )
+        
+        # Store poll data
+        self.poll_data[message.poll.id] = {
+                "id": message.poll.id,
+                "question_field": question_field.question_id,
+                "question": poll_fields.question,
+                "options": poll_fields.options,
+                "chat_id": user_id,
+                "message_id": message.message_id,
+                "creator": user_id,
+                "type": "regular",
+                "votes": {i: [] for i in range(len(poll_fields.options))}
+        }
+            
+        # Save to storage
+        self.save_poll_data(self.poll_data)
+            
+    def parse_poll_options(self, options: List[QuestionOption], language: str):
+        if not options:
+            return []
+        return [option.text.get(language) for option in options]
+         
+    def update_poll_data(self, poll_answer: PollAnswer):
+        poll_id = poll_answer.poll_id
+        user_id = poll_answer.user.id
+        selected_options = poll_answer.option_ids
+        
+        # Update vote tracking
+        poll_info = self.poll_data[poll_id]
+        print(f"Poll info: {poll_info}")
+        
+        # Remove user's previous votes
+        for option_id in poll_info['votes']:
+            if user_id in poll_info['votes'][option_id]:
+                poll_info['votes'][option_id].remove(user_id)
+        
+        # Add new votes
+        for option_id in selected_options:
+            if option_id not in poll_info['votes']:
+                poll_info['votes'][option_id] = []
+            poll_info['votes'][option_id].append(user_id)
+
+        print(f"Poll {poll_id}: User {user_id} voted for options {selected_options}")
+
+        
+    def save_poll_data(self, poll_data: Dict[str, TelegramPollData]) -> bool:
+        """Save poll data to file storage."""
+        try:
+            success = self.file_storage.save_data("poll_data", poll_data)
+            if success:
+                logger.info(f"Saved poll data to storage")
+            return success
+        except Exception as e:
+            logger.error(f"Error saving poll data: {e}")
+            return False
+        
+    def load_poll_data(self) -> dict:
+        """Load poll data from file storage."""
+        try:
+            poll_data = self.file_storage.load_data("poll_data", {})
+            # create a dict with the id as the key
+            logger.info(f"Loaded {len(poll_data)} polls from storage")
+            return poll_data
+        except Exception as e:
+            logger.error(f"Error loading poll data: {e}")
+            return {}
     
     def build_app(self):        
         # --- Bot token from environment variable ---
@@ -250,6 +390,10 @@ class WildGingerBot:
         # app.add_handler(CommandHandler("remind_partner", remind_partner))
         # app.add_handler(CommandHandler("cancel", cancel_registration))
         # app.add_handler(CommandHandler("get_to_know", get_to_know_command))
+        
+        # Poll handlers
+        app.add_handler(PollAnswerHandler(self.handle_poll_answer))
+        app.add_handler(PollHandler(self.handle_poll_message))
         
         # Admin commands
         # app.add_handler(CommandHandler("admin_dashboard", admin_dashboard))
