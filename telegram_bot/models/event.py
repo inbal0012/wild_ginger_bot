@@ -29,6 +29,9 @@ class EventDTO:
     theme: str
     max_participants: str
     status: str
+    participant_commitment: str
+    line_rules: str
+    place_rules: str
     is_public: bool
     main_group_id: str
     singles_group_id: str

@@ -1462,6 +1462,15 @@ class FormFlowService(BaseService):
             event_details = await self._get_event_details(form_state.event_id)
             description = self.get_event_description(event_details)
             await self.send_telegram_text_message(description, form_state.language, form_state.user_id)
+        elif question_def.question_id == "agree_participant_commitment":
+            event_details = await self._get_event_details(form_state.event_id)
+            await self.send_telegram_text_message(event_details.participant_commitment, form_state.language, form_state.user_id)
+        elif question_def.question_id == "agree_line_rules":
+            event_details = await self._get_event_details(form_state.event_id)
+            await self.send_telegram_text_message(event_details.line_rules, form_state.language, form_state.user_id)
+        elif question_def.question_id == "agree_place_rules":
+            event_details = await self._get_event_details(form_state.event_id)
+            await self.send_telegram_text_message(event_details.place_rules, form_state.language, form_state.user_id)
     async def send_telegram_text_message(self, text: str, language: str, user_id: str):
         """Send a text message to a user."""
         await self.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN)

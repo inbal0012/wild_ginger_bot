@@ -20,6 +20,7 @@ class EventService:
         return active_events
 
     def row_to_eventDTO(self, row: Dict[str, Any]) -> EventDTO:
+        # TODO make {name, event_type, description, location, schedule, price_include, participant_commitment, line_rules, place_rules } translatable using Text class
         return EventDTO(
             id=row[self.headers['id']],
             name=row[self.headers['name']],
@@ -41,7 +42,10 @@ class EventService:
             end_date=row[self.headers['end_date']],
             end_time=row[self.headers['end_time']],
             price_include=row[self.headers['price_include']],
-            schedule=row[self.headers['schedule']]
+            schedule=row[self.headers['schedule']],
+            participant_commitment=row[self.headers['participant_commitment']],
+            line_rules=row[self.headers['line_rules']],
+            place_rules=row[self.headers['place_rules']]
         )
 
     def get_event_by_id(self, event_id: str) -> Optional[EventDTO]:
