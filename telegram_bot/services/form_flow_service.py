@@ -16,6 +16,7 @@ from .registration_service import RegistrationService
 from .file_storage_service import FileStorageService
 from telegram import Update, Bot
 from telegram.ext import ContextTypes, Application
+from telegram.constants import ParseMode
 from ..models.form_flow import (
     QuestionType, ValidationRuleType, FormState, ValidationRule,
     SkipConditionItem, SkipCondition, Text, QuestionOption, QuestionDefinition,
@@ -124,9 +125,24 @@ class FormFlowService(BaseService):
         self.registration_service = RegistrationService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
+        self.extra_texts: Dict[str, Text] = self._initialize__extra_text()
             
     def set_telegram_bot(self, bot: Bot):
         self.bot = bot
+    
+    def _initialize__extra_text(self) -> Dict[str, Text]:
+        """Get extra text for a specific question."""
+        return{
+            "full_name": Text(he="*פרטים אישיים*\nאיזה כיף שאתה מתעניין באירוע! נעבור על כמה שאלות כל מנת להכיר אותך טוב יותר.", 
+                            en="*Personal details*\nIt's great that you're interested in the event! We'll go through a few questions to get to know you better."),
+            "bdsm_experience": Text(he='*בואו נדבר בדס"מ*\nנעים מהכיר! היות ומדובר על אירוע בדסמי נעבור כעת על כמה שאלות בנושא.', 
+                                    en="*Let's talk BDSM*\nNice to meet you! Since this is a BDSM event, we'll go through a few questions on the subject."),
+            "food_restrictions": Text(he="*אוכל ושאר ירקות*", en="*Food, truffles, and trifles*"),
+            "agree_participant_commitment": Text(he="*חוקים*\n כמעט סוף. בואו נעבור על חוקי הליין, המקום וכו'.", 
+                                                en="*Rules*\n Almost done. Let's go through the line rules, the place, and so on."),
+            "wants_to_helper": Text(he="*הלפרים ו DM-ים*\nזהו! סיימנו, אך לפני שאני משחרר אתכם, אשמח לדעת האם תרצו לעזור באירוע (בתמורה להנחה בעלות האירוע)", 
+                                    en="*Helpers and DMs*\nThat's it! We're done, but before I let you go, I'd like to know if you'd like to help at the event (in exchange for a discount on the event's cost)"),            
+        }
     
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:
         """Initialize question definitions following the form order specification."""
@@ -414,7 +430,7 @@ class FormFlowService(BaseService):
                 save_to="Users",
                 order=13,
                 placeholder=Text(he=f"למשל: את / אתה / הם\n{skip.he}", 
-                                 en=f"for example: she/he/they\n{skip.en}"),
+                                en=f"for example: she/he/they\n{skip.en}"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
@@ -1243,11 +1259,14 @@ class FormFlowService(BaseService):
             # For single select, take the first value
             answer = update.message.text
             
-            # Validate the answer
-            validation_result = await self._validate_question_answer(question_def, answer, form_state)
-            if not validation_result["valid"]:
-                self.log_error(f"Validation failed for user {user_id}: {validation_result['message']}")
-                return validation_result
+            if answer == "המשך" or answer == "continue":
+                self.log_info(f"User {user_id} skipped question {question_field}")
+            else:
+                # Validate the answer
+                validation_result = await self._validate_question_answer(question_def, answer, form_state)
+                if not validation_result["valid"]:
+                    self.log_error(f"Validation failed for user {user_id}: {validation_result['message']}")
+                    return validation_result
             
             # Update form state with the answer
             form_state.update_answer(question_field, answer)
@@ -1371,11 +1390,7 @@ class FormFlowService(BaseService):
                         break
             
             if next_question:
-                if next_question.question_id == "would_you_like_to_register":
-                    # sent event details
-                    event_details = await self._get_event_details(form_state.event_id)
-                    description = self.get_event_description(event_details)
-                    await self.send_telegram_text_message(description, form_state.language, form_state.user_id)
+                await self.extra_text_to_send(next_question, form_state)
                 form_state.current_question = next_question.question_id
                 self.save_active_forms()
                 return next_question
@@ -1387,9 +1402,19 @@ class FormFlowService(BaseService):
             self.log_error(f"Error getting next question: {e}")
             return None
     
+    async def extra_text_to_send(self, question_def: QuestionDefinition, form_state: FormState) -> str:
+        """Get extra text to send for a specific question."""
+        if question_def.question_id in self.extra_texts:
+            await self.send_telegram_text_message(self.extra_texts[question_def.question_id].get(form_state.language), form_state.language, form_state.user_id)
+            
+        if question_def.question_id == "would_you_like_to_register":
+            # sent event details
+            event_details = await self._get_event_details(form_state.event_id)
+            description = self.get_event_description(event_details)
+            await self.send_telegram_text_message(description, form_state.language, form_state.user_id)
     async def send_telegram_text_message(self, text: str, language: str, user_id: str):
         """Send a text message to a user."""
-        await self.bot.send_message(chat_id=user_id, text=text)
+        await self.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN)
     
     def get_event_description(self, event_details: EventDTO) -> str:
         """Get event description from event details."""
@@ -1433,7 +1458,7 @@ class FormFlowService(BaseService):
                 if condition.type == "field_value":
                     field_value = form_state.get_answer(condition.field)
                     if condition.operator == "equals":
-                        if field_value == condition.value:
+                        if field_value == condition.value or (not field_value) or field_value == "":
                             return True
                     elif condition.operator == "not_in":
                         if field_value not in condition.value:
