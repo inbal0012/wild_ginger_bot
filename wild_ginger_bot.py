@@ -1,5 +1,5 @@
 from telegram import Update, BotCommand, User, PollAnswer
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, PollHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, PollHandler, MessageHandler, filters
 import os
 from dotenv import load_dotenv
 import logging
@@ -264,6 +264,19 @@ class WildGingerBot:
         else:
             print(f"👋 User {user_id} completed the form")
     
+    async def handle_text_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle all text messages"""
+        user_id = self.get_user_from_update(update)
+        print(f"👋 User {user_id} sent a text message")
+        
+        # TODO: handle the text message
+        # get the current question from the active forms
+        # Handle the poll answer in the form flow service
+        next_question = await self.form_flow_service.handle_text_answer(update, context)
+        if next_question:
+            await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+        
+        return
     
     def get_language_from_user(self, user_id: str):
         user_data = self.user_service.get_user_by_telegram_id(user_id)
@@ -404,12 +417,14 @@ class WildGingerBot:
         # app.add_handler(CommandHandler("admin_digest", admin_digest))
         
         # Message handlers (must be after command handlers)
-        from telegram.ext import MessageHandler, filters
-        # app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_get_to_know_response))
-
+        # Listen to ALL text messages (except commands - they're handled above)
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_messages))
+        
         # Set the post_init hook
         app.post_init = self.post_init
 
+        self.app = app
+        self.form_flow_service.set_telegram_bot(app.bot)
         print("Bot is running with polling...")
 
         try:

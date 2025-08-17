@@ -1162,6 +1162,26 @@ class FormFlowService(BaseService):
             self.log_error(f"Error handling poll answer for user {user_id}: {e}")
             return None
     
+    async def handle_text_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text answer from Telegram."""
+        user_id = update.effective_user.id
+        try:
+            # Get the form state for this user
+            form_state = self.active_forms.get(str(user_id))
+            if not form_state:
+                self.log_error(f"No active form found for user {user_id}")
+                return
+            
+            question_field = form_state.current_question
+            # Get the question definition
+            if question_field not in self.question_definitions:
+                self.log_error(f"Question field {question_field} not found in definitions")
+                return
+            
+            question_def = self.question_definitions[question_field]
+        except Exception as e:
+            self.log_error(f"Error handling text answer for user {user_id}: {e}")
+            return None
     
     async def _validate_question_answer(self, question_def: QuestionDefinition, answer: Any, form_state: FormState) -> Dict[str, Any]:
         """Validate answer for a specific question."""
