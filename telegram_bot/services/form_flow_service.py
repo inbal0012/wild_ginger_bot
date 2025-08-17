@@ -44,6 +44,9 @@ class FormState:
         
         if (step == "event_selection"):
             self.event_id = answer
+            
+        if (step == "would_you_like_to_register" and answer == "no"):
+            self.completed = True
     
     def get_answer(self, step: str) -> Optional[Any]:
         """Get answer for a specific step."""
@@ -1100,6 +1103,7 @@ class FormFlowService(BaseService):
     
     async def _complete_form(self, form_state: FormState) -> Dict[str, Any]:
         """Handle form completion."""
+        # TODO
         return {
             "completed": True,
             "form_id": f"{form_state.user_id}_{form_state.event_id}",
