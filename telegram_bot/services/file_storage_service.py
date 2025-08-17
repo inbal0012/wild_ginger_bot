@@ -93,7 +93,18 @@ class FileStorageService:
             with open(file_path, 'r', encoding='utf-8') as f:
                 save_data = json.load(f)
             
+            # expect a list of dicts
+            if "data" not in save_data:
+                logger.error(f"❌ {filename} Data not found in file: {save_data}")
+                return default
+            if "metadata" not in save_data:
+                logger.error(f"❌ {filename} Metadata not found in file: {save_data}")
+                return default
+            return save_data["data"]
+            
+            
             # Extract the actual data
+            
             data = save_data.get("data", default)
             metadata = save_data.get("metadata", {})
             

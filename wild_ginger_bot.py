@@ -412,7 +412,7 @@ class WildGingerBot:
         print("Bot is running with polling...")
 
         try:
-            app.run_polling(drop_pending_updates=True)
+            app.run_polling(drop_pending_updates=False)
         except Exception as e:
             if "Conflict" in str(e):
                 print("❌ Error: Another instance of the bot is already running!")
