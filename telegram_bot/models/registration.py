@@ -1,6 +1,7 @@
 from typing import Optional, Dict, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from uuid import uuid4
 
 class RegistrationStatus(Enum):
     FORM_INCOMPLETE = "form_incomplete"
@@ -15,35 +16,45 @@ class RegistrationStatus(Enum):
     CANCELLED = "cancelled"
 
 @dataclass
-class StepProgress:
-    form: bool = False
-    partner: bool = False
-    get_to_know: bool = False
-    approved: bool = False
-    paid: bool = False
-    group_access: bool = False
+class CreateRegistrationDTO:
+    user_id: str
+    event_id: str
+    id: str = field(default_factory=lambda: str(uuid4()))
+    status: str = RegistrationStatus.FORM_INCOMPLETE.value
 
 @dataclass
 class RegistrationData:
-    submission_id: str
-    telegram_user_id: str
-    user_name: str
-    partner_name: Optional[str] = None
-    status: RegistrationStatus = RegistrationStatus.FORM_INCOMPLETE
-    step_progress: Optional[StepProgress] = None
-    form_data: Optional[Dict[str, str]] = None
-    vibe_data: Optional[Dict[str, str]] = None
-    admin_notes: str = ""
-    last_updated: str = ""
-    language: str = "en"
-    
-    def __post_init__(self):
-        if self.step_progress is None:
-            self.step_progress = StepProgress()
-        if self.form_data is None:
-            self.form_data = {}
-        if self.vibe_data is None:
-            self.vibe_data = {}
+    id: str
+    event_id: str
+    user_id: str
+    status: str
+    partner_telegram_link: str
+    payment_status: str
+    payment_method: str
+    registration_date: str
+    payment_date: str
+    partner_or_single: str
+    intro_opt_in: str
+    intro_text: str
+    intro_posted_at: str
+    created_at: str
+    updated_at: str
+    would_you_like_to_register: bool
+    last_sti_test: str
+    bdsm_declaration: bool
+    is_play_with_partner_only: bool
+    desired_play_partners: str
+    contact_type: str
+    contact_type_other: str
+    share_bdsm_interests: bool
+    alcohol_in_event: str # yes / no / maybe
+    agree_participant_commitment: bool
+    enthusiastic_verbal_consent_commitment: bool
+    agree_line_rules: bool
+    wants_to_helper: bool
+    helper_shifts: str
+    wants_to_DM: bool
+    DM_shifts: str
     
 @dataclass
 class PartnerInfo:

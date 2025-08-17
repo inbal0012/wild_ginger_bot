@@ -3,7 +3,7 @@ from datetime import datetime
 
 from ..config.settings import settings
 from ..exceptions import SheetsConnectionException
-from ..models.registration import RegistrationData, StepProgress, RegistrationStatus
+from ..models.registration import RegistrationData, RegistrationStatus
 
 class SheetsService:
     def __init__(self):
@@ -373,6 +373,9 @@ class SheetsService:
             print(f"❌ Error updating {column_key}: {e}")
             return False
 
+    def update_registration_cell(self, submission_id: str, column_key: str, value: str) -> bool:
+        # TODO: update the registration cell
+        return self._update_cell(submission_id, column_key, value)  
 
     def update_user_cell(self, id: str, id_column: str, sheet_name: str, column_key: str, value: str) -> bool:
         """Generic method to update a single cell"""

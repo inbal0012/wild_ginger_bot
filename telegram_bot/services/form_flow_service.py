@@ -10,13 +10,17 @@ from .base_service import BaseService
 from .sheets_service import SheetsService
 from .user_service import UserService
 from .event_service import EventService
+from .registration_service import RegistrationService
 from .file_storage_service import FileStorageService
+from telegram import Update, Bot
+from telegram.ext import ContextTypes, Application
 from ..models.form_flow import (
     QuestionType, ValidationRuleType, FormState, ValidationRule,
     SkipConditionItem, SkipCondition, Text, QuestionOption, QuestionDefinition,
     ValidationResult, FormContext, FormStateData, FormProgress, FormData,
     UpdateableFieldDTO, UpdateResult
 )
+from ..models.registration import CreateRegistrationDTO, RegistrationStatus
 from ..models.event import EventDTO
 
 class FormState:
@@ -37,6 +41,9 @@ class FormState:
         self.answers[step] = answer
         self.current_question = step
         self.updated_at = asyncio.get_event_loop().time()
+        
+        if (step == "event_selection"):
+            self.event_id = answer
     
     def get_answer(self, step: str) -> Optional[Any]:
         """Get answer for a specific step."""
@@ -64,6 +71,9 @@ class FormState:
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
+        
+    def get_language(self):
+        return self.language
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FormState':
@@ -95,6 +105,10 @@ class FormFlowService(BaseService):
         self.event_service = EventService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
+            
+    def set_telegram_bot(self, bot: Bot):
+        self.bot = bot
+    
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:
         """Initialize question definitions following the form order specification."""
         # TODO move outside of the class (config file)
@@ -1206,8 +1220,13 @@ class FormFlowService(BaseService):
                         break
             
             if next_question:
-    
-    def validate_telegram_username(self, username: str) -> Tuple[bool, str]:
+                if next_question.question_id == "would_you_like_to_register":
+                    # sent event details
+                    event_details = await self._get_event_details(form_state.event_id)
+                    description = self.get_event_description(event_details)
+                    await self.send_telegram_text_message(description, form_state.language, form_state.user_id)
+                form_state.current_question = next_question.question_id
+                self.save_active_forms()
                 return next_question
             else:
                 # Form is complete
@@ -1217,6 +1236,41 @@ class FormFlowService(BaseService):
             self.log_error(f"Error getting next question: {e}")
             return None
     
+    async def send_telegram_text_message(self, text: str, language: str, user_id: str):
+        """Send a text message to a user."""
+        await self.bot.send_message(chat_id=user_id, text=text)
+    
+    def get_event_description(self, event_details: EventDTO) -> str:
+        """Get event description from event details."""
+        return f'''
+י Wild Ginger גאים להציג:
+{event_details.name}
+יום {event_details.start_date}, {event_details.start_time}-{event_details.end_time}, ב {event_details.location}
+
+{event_details.schedule}
+
+{event_details.description}
+
+
+מחיר:
+השתתפות בתשלום לצורך כיסוי עלויות.
+-> זוג - {event_details.price_couple} ₪ לזוג
+-> נשים / גברים / א-בינאריים יחידימות - {event_details.price_single} ₪ ליחיד
+
+מחיר השתתפות כולל:
+{event_details.price_include}
+
+אלכוהול בתוספת תשלום.
+
+ניתן להוזיל את המחיר ע"י הצטרפות לצוות כהלפר ו/או דיאמ (פרטים בעמוד האחרון)
+
+
+* ההרשמה באיזון משחקי. (כלומר מישהו שאתם מתכוונים לשחק איתו)
+אנו מברכים שילובים או עירבובים לפי רצון המשתתפים. אך מצפים שתביאו חטיף מהבית ולא שתבואו לצוד באירוע.
+** כל אירועינו הינם להטבק פרנדלי, ואנו עושות את המיטב כדי לייצר מרחב נעים ומזמין לאנשימות מכל הקשת. 🏳️‍🌈💖
+*** הרשמה בטופס זה אינה מהווה אישור הגעה. זאת הזמנה ובדיקת עניין בלבד. במידה ויש התאמה נחזור אליך. 🙃😊
+
+    '''
     
     async def _should_skip_question(self, question_def: QuestionDefinition, form_state: FormState) -> bool:
         """Check if a question should be skipped based on conditions."""
@@ -1272,7 +1326,17 @@ class FormFlowService(BaseService):
                 self.log_error(f"Question definition not found for field {question_field}")
                 return False
             
-            success = self.sheets_service.update_user_cell(user_id, question_field, answer)
+            if question_def.question_id == "event_selection":
+                return await self.save_event_selection_to_sheets(user_id, answer)
+            
+            # Determine which table to save to based on save_to field
+            if question_def.save_to == "Users":
+                # Save to users table
+                success = self.sheets_service.update_user_cell(user_id, "telegram_user_id", "Users", question_field, answer)
+            else:
+                # Save to registration table
+                # TODO get reg_id from user_id
+                success = self.sheets_service.update_user_cell(user_id, "telegram_user_id", "Registrations", question_field, answer)
             
             if success:
                 self.log_info(f"Saved answer for user {user_id}, field {question_field} to {question_def.save_to} table")
@@ -1285,6 +1349,17 @@ class FormFlowService(BaseService):
             self.log_error(f"Error saving answer to sheets: {e}")
             return False
     
+    async def save_event_selection_to_sheets(self, user_id: str, event_id: Any) -> bool:
+        """
+        Save event selection to the appropriate table based on the question's save_to field.
+        """
+        registration = CreateRegistrationDTO(user_id=user_id, event_id=event_id, status=RegistrationStatus.FORM_INCOMPLETE)
+        result = await self.registration_service.create_new_registration(registration)
+        if not result:
+            self.log_error(f"Failed to save event selection to sheets for user {user_id}, event {event_id}")
+            return False
+        
+        return result
     
     async def validate_telegram_username(self, username: str) -> Tuple[bool, str]:
         """

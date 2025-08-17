@@ -3,6 +3,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Appli
 import os
 from dotenv import load_dotenv
 import logging
+from typing import List, Dict
 
 from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, QuestionOption
 from telegram_bot.models.TelegramPollFields import TelegramPollFields, TelegramPollData
