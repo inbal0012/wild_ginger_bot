@@ -23,6 +23,7 @@ from ..models.form_flow import (
 )
 from ..models.registration import CreateRegistrationDTO, RegistrationStatus
 from ..models.event import EventDTO
+from ..utils.validate_social_link import validate_social_link
 
 class FormState:
     """Represents the state of a form for a specific user."""
@@ -328,11 +329,11 @@ class FormFlowService(BaseService):
             "facebook_profile": QuestionDefinition(
                 question_id="facebook_profile",
                 question_type=QuestionType.FACEBOOK_LINK,
-                title=Text(he="אנא שתף לינק לפרופיל הפייסבוק שלך", en="Please share a link to your Facebook profile"),
+                title=Text(he="אנא שתף לינק לפרופיל הפייסבוק או האינסטגרם שלך", en="Please share a link to your Facebook OR Instagram profile"),
                 required=True,
                 save_to="Users",
                 order=10,
-                placeholder=Text(he="https://facebook.com/username", en="https://facebook.com/username"),
+                placeholder=Text(he="https://facebook.com/username Or https://instagram.com/username", en="https://facebook.com/username Or https://instagram.com/username"),
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
@@ -342,11 +343,11 @@ class FormFlowService(BaseService):
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
-                        error_message=Text(he="אנא הזן לינק לפייסבוק", en="Please enter Facebook link")
+                        error_message=Text(he="אנא הזן לינק לפייסבוק או לאינסטגרם", en="Please enter Facebook or Instagram link")
                     ),
                     ValidationRule(
                         rule_type=ValidationRuleType.FACEBOOK_LINK,
-                        error_message=Text(he="הלינק אינו תקין. אנא הזן לינק תקין לפייסבוק", en="Invalid link. Please enter a valid Facebook link")
+                        error_message=Text(he="הלינק אינו תקין. אנא הזן לינק תקין לפייסבוק או לאינסטגרם", en="Invalid link. Please enter a valid Facebook or Instagram link")
                     )
                 ]
             ),
@@ -1268,6 +1269,13 @@ class FormFlowService(BaseService):
                         return {
                             "valid": False,
                             "message": rule.error_message.get(form_state.language, "Invalid Telegram link")
+                        }
+                elif rule.rule_type == ValidationRuleType.FACEBOOK_LINK:
+                    validation_result = validate_social_link(answer)
+                    if not validation_result.is_valid:
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Invalid Facebook link")
                         }
             
             return {"valid": True, "message": ""}
