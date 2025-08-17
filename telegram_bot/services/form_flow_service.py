@@ -249,7 +249,13 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא הזן רמת ניסיון", en="Please enter experience")
                     )
-                ]
+                ],
+                # TODO skip_condition=SkipCondition(
+                #     operator="OR",
+                #     conditions=[
+                #         SkipConditionItem(type="user_exists", field="telegram_id")
+                #     ]
+                # ),
             ),
             # 7. partner or single
             "partner_or_single": QuestionDefinition(
@@ -1401,6 +1407,9 @@ class FormFlowService(BaseService):
             
             if question_def.question_id == "event_selection":
                 return await self.save_event_selection_to_sheets(user_id, answer)
+            elif question_def.question_id == "relevent_experience":
+                event_type = await self._get_event_type(self.active_forms[user_id].event_id)
+                answer = str({event_type: answer})
             
             # Determine which table to save to based on save_to field
             if question_def.save_to == "Users":
