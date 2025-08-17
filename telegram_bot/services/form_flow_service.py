@@ -5,6 +5,7 @@ Handles step-by-step form progression, state management, and validation.
 
 import asyncio
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union, Tuple
 from enum import Enum
 from .base_service import BaseService
@@ -323,6 +324,10 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא הזן תאריך בדיקה", en="Please enter test date")
                     ),
+                    ValidationRule(
+                        rule_type=ValidationRuleType.DATE_RANGE,
+                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין", en="Invalid date. Please enter a valid date")
+                    )
                 ]
             ),
             # 10. Facebook profile (new users only)
@@ -370,6 +375,10 @@ class FormFlowService(BaseService):
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא הזן תאריך לידה", en="Please enter birth date")
+                    ),
+                    ValidationRule(
+                        rule_type=ValidationRuleType.DATE_RANGE,
+                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין", en="Invalid date. Please enter a valid date")
                     ),
                     ValidationRule(
                         rule_type=ValidationRuleType.AGE_RANGE,
@@ -1250,6 +1259,20 @@ class FormFlowService(BaseService):
                             "message": rule.error_message.get(form_state.language, "Required field")
                         }
                 
+                elif rule.rule_type == ValidationRuleType.DATE_RANGE:
+                    if not re.match(r'^(\d{2})/(\d{2})/(\d{4})$', answer):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Invalid date")
+                        }
+                        
+                elif rule.rule_type == ValidationRuleType.AGE_RANGE:
+                    if not self._validate_age_range(answer, rule.params):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Invalid age")
+                        }
+                        
                 elif rule.rule_type == ValidationRuleType.MIN_LENGTH:
                     if len(str(answer)) < rule.params.get("min", 0):
                         return {
@@ -1283,7 +1306,22 @@ class FormFlowService(BaseService):
         except Exception as e:
             self.log_error(f"Error validating answer: {e}")
             return {"valid": False, "message": "Validation error"}
+        
+    def _validate_age_range(self, birth_date_str: str, params: Dict[str, Any]) -> bool:
+        """Validate age range from birth date."""
+        try:
+            birth_date = datetime.strptime(birth_date_str, "%d/%m/%Y")
+            today = datetime.now()
+            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            
+            min_age = params.get("min_age", 18)
+            max_age = params.get("max_age", 100)
+            
+            return min_age <= age <= max_age
+        except (ValueError, TypeError):
+            return False
     
+
     async def _get_next_question_for_field(self, current_field: str, form_state: FormState) -> Optional[Dict[str, Any]]:
         """Get the next question after answering a specific field."""
         try:
