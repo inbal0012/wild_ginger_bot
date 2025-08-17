@@ -300,7 +300,7 @@ class WildGingerBot:
         # Add placeholder if available
         if question.placeholder:
             placeholder_text = question.placeholder.he if language == "he" else question.placeholder.en
-            message = f"{question_text}\n\n{placeholder_text}"
+            message = f"{question_text}\n({placeholder_text})"
         else:
             message = question_text
             
@@ -407,7 +407,6 @@ class WildGingerBot:
         
         # Poll handlers
         app.add_handler(PollAnswerHandler(self.handle_poll_answer))
-        app.add_handler(PollHandler(self.handle_poll_message))
         
         # Admin commands
         # app.add_handler(CommandHandler("admin_dashboard", admin_dashboard))
