@@ -29,6 +29,7 @@ class FormState:
     def __init__(self, user_id: str, event_id: Optional[str] = None, language: str = "he"):
         self.user_id = user_id
         self.event_id = event_id
+        self.registration_id = None
         self.language = language
         self.current_question = "language"
         self.answers: Dict[str, Any] = {}
@@ -44,9 +45,16 @@ class FormState:
         
         if (step == "event_selection"):
             self.event_id = answer
-            
-        if (step == "would_you_like_to_register" and answer == "no"):
+        elif (step == "would_you_like_to_register" and answer == "no"):
             self.completed = True
+    
+    def update_registration_id(self, registration_id: str) -> None:
+        self.registration_id = registration_id
+        self.updated_at = asyncio.get_event_loop().time()
+        
+    def update_current_question(self, question: str) -> None:
+        self.current_question = question
+        self.updated_at = asyncio.get_event_loop().time()
     
     def get_answer(self, step: str) -> Optional[Any]:
         """Get answer for a specific step."""
@@ -86,6 +94,8 @@ class FormState:
             event_id=data.get("event_id"),
             language=data.get("language", "he")
         )
+        form_state.registration_id = data.get("registration_id")
+        form_state.current_question = data.get("current_question", "language")
         form_state.answers = data.get("answers", {})
         form_state.completed = data.get("completed", False)
         form_state.created_at = data.get("created_at", asyncio.get_event_loop().time())
@@ -1179,6 +1189,29 @@ class FormFlowService(BaseService):
                 return
             
             question_def = self.question_definitions[question_field]
+            
+            # For single select, take the first value
+            answer = update.message.text
+            
+            # Validate the answer
+            validation_result = await self._validate_question_answer(question_def, answer, form_state)
+            if not validation_result["valid"]:
+                self.log_error(f"Validation failed for user {user_id}: {validation_result['message']}")
+                return validation_result
+            
+            # Update form state with the answer
+            form_state.update_answer(question_field, answer)
+            
+            # Save answer to the appropriate table
+            await self.save_answer_to_sheets(str(user_id), question_field, answer)
+            
+            # Save form state
+            self.save_active_forms()
+            
+            # Get next question or complete form
+            next_question = await self._get_next_question_for_field(question_field, form_state)
+            return next_question
+            
         except Exception as e:
             self.log_error(f"Error handling text answer for user {user_id}: {e}")
             return None
@@ -1357,11 +1390,17 @@ class FormFlowService(BaseService):
             # Determine which table to save to based on save_to field
             if question_def.save_to == "Users":
                 # Save to users table
-                success = self.sheets_service.update_user_cell(user_id, "telegram_user_id", "Users", question_field, answer)
+                success = self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", question_field, answer)
             else:
                 # Save to registration table
                 # TODO get reg_id from user_id
-                success = self.sheets_service.update_user_cell(user_id, "telegram_user_id", "Registrations", question_field, answer)
+                form = self.active_forms[user_id]
+                event_id = form.event_id
+                reg_id = self.registration_service.get_registration_id_by_user_id(user_id, event_id)
+                if not reg_id:
+                    self.log_error(f"No registration found for user {user_id}, event {event_id}")
+                    return False
+                success = self.sheets_service.update_cell(reg_id, "registration_id", "Registrations", question_field, answer)
             
             if success:
                 self.log_info(f"Saved answer for user {user_id}, field {question_field} to {question_def.save_to} table")
@@ -1378,12 +1417,17 @@ class FormFlowService(BaseService):
         """
         Save event selection to the appropriate table based on the question's save_to field.
         """
+        # TODO make sure the event_id is valid
+        # TODO make sure the user_id is valid
+        # TODO make sure the user is not already registered for this event
         registration = CreateRegistrationDTO(user_id=user_id, event_id=event_id, status=RegistrationStatus.FORM_INCOMPLETE)
         result = await self.registration_service.create_new_registration(registration)
         if not result:
             self.log_error(f"Failed to save event selection to sheets for user {user_id}, event {event_id}")
             return False
         
+        self.active_forms[user_id].registration_id = registration.id
+        self.save_active_forms()
         return result
     
     async def validate_telegram_username(self, username: str) -> Tuple[bool, str]:

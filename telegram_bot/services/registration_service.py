@@ -51,3 +51,18 @@ class RegistrationService:
         except Exception as e:
             print(f"Error creating new registration: {e}")
             return False
+        
+    def get_registration_id_by_user_id(self, user_id: str, event_id: str) -> Optional[str]:
+        sheet_data = self.sheets_service.get_data_from_sheet("Registrations")
+        if not sheet_data:
+            return None
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        user_id_col = self.headers['user_id']
+        event_id_col = self.headers['event_id']
+        for row in rows:
+            if row and row[user_id_col] == str(user_id) and row[event_id_col] == str(event_id):
+                return row[self.headers['registration_id']]
+        return None

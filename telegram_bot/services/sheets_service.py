@@ -374,11 +374,7 @@ class SheetsService:
             print(f"❌ Error updating {column_key}: {e}")
             return False
 
-    def update_registration_cell(self, submission_id: str, column_key: str, value: str) -> bool:
-        # TODO: update the registration cell
-        return self._update_cell(submission_id, column_key, value)  
-
-    def update_user_cell(self, id: str, id_column: str, sheet_name: str, column_key: str, value: str) -> bool:
+    def update_cell(self, id: str, id_column: str, sheet_name: str, column_key: str, value: str) -> bool:
         """Generic method to update a single cell"""
         if not self.spreadsheet:
             print("⚠️  Google Sheets not available")
@@ -405,9 +401,9 @@ class SheetsService:
                     sheet_row = row_index + 2  # Adjust for header row and 0-based indexing
                     
                     col_letter = self.column_index_to_letter(target_col)
-                    range_name = f"Users!{col_letter}{sheet_row}"
+                    range_name = f"{sheet_name}!{col_letter}{sheet_row}"
                     
-                    if len(value) > 1:
+                    if isinstance(value, list) and len(value) > 1:
                         value = ", ".join(value)
                     
                     result = self.spreadsheet.spreadsheets().values().update(
@@ -418,7 +414,7 @@ class SheetsService:
                     ).execute()
                     
                     print(f"✅ Updated {column_key} to {value} for user {id}")
-                    return True
+                    return result
             
             print(f"❌ Could not find user {id} in Google Sheets")
             return False
