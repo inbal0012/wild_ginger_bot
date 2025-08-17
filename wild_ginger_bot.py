@@ -7,11 +7,11 @@ from typing import List, Dict
 
 from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, QuestionOption
 from telegram_bot.models.TelegramPollFields import TelegramPollFields, TelegramPollData
+from telegram_bot.models.user import CreateUserFromTelegramDTO
 
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
-from telegram_bot.models.user import CreateUserFromTelegramDTO
 from telegram_bot.services.form_flow_service import FormFlowService
 from telegram_bot.services.file_storage_service import FileStorageService
 
@@ -274,7 +274,10 @@ class WildGingerBot:
         # Handle the poll answer in the form flow service
         next_question = await self.form_flow_service.handle_text_answer(update, context)
         if next_question:
-            await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+            if isinstance(next_question, QuestionDefinition):
+                await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+            else:
+                await update.message.reply_text(next_question['message'])
         
         return
     
