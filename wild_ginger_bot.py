@@ -4,6 +4,8 @@ import os
 from dotenv import load_dotenv
 import logging
 
+from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, QuestionOption
+
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
@@ -15,6 +17,8 @@ from telegram_bot.services.file_storage_service import FileStorageService
 load_dotenv()
 
 # Enable logging
+logger = logging.getLogger(__name__)
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
@@ -43,10 +47,14 @@ class WildGingerBot:
             f"Hi {user['first_name']}! nice to meet you!"
         )
         
-        # TODO: start the form flow
-        result = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
+        # Start the form flow
+        question = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
+        if question:
+            await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
+        else:
+            print(f"❌ Error: Could not start form for user {user.id}")
         
-        print(f"👋 Form flow result: {result}")
+        print(f"👋 Form flow result: {question}")
         
     async def create_new_user(self, user: User):
         user_id = str(user.id)                
