@@ -9,6 +9,7 @@ from enum import Enum
 from .base_service import BaseService
 from .sheets_service import SheetsService
 from .user_service import UserService
+from .event_service import EventService
 from .file_storage_service import FileStorageService
 from ..models.form_flow import (
     QuestionType, ValidationRuleType, FormState, ValidationRule,
@@ -16,6 +17,7 @@ from ..models.form_flow import (
     ValidationResult, FormContext, FormStateData, FormProgress, FormData,
     UpdateableFieldDTO, UpdateResult
 )
+from ..models.event import EventDTO
 
 class FormState:
     """Represents the state of a form for a specific user."""
@@ -90,6 +92,7 @@ class FormFlowService(BaseService):
         self.sheets_service = sheets_service
         self.file_storage = FileStorageService()
         self.user_service = UserService(sheets_service)
+        self.event_service = EventService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:
@@ -812,8 +815,10 @@ class FormFlowService(BaseService):
     
     def parse_upcoming_events(self) -> List[QuestionOption]:
         """Parse upcoming events from the sheets service."""
-        return [QuestionOption(value="play", text=Text(he="פליי פארטי", en="play party")), QuestionOption(value="cuddle", text=Text(he="cuddle", en="cuddle")),
-                QuestionOption(value="cuddle", text=Text(he="כירבולייה", en="cuddle"))]
+        events = self.event_service.get_upcoming_events()
+        
+        return [QuestionOption(value=event.id, text=Text(he=f"{event.start_date} - {event.name} ({event.event_type})", en=f"{event.start_date} - {event.name} ({event.event_type})")) for event in events]
+    
     
     def get_active_forms(self) -> Dict[str, FormState]:
         """Get all active forms from file storage."""
@@ -1068,20 +1073,10 @@ class FormFlowService(BaseService):
         
     #     return {"valid": True, "message": ""}
     
-    async def _get_event_details(self, event_id: str) -> Dict[str, Any]:
+    async def _get_event_details(self, event_id: str) -> EventDTO:
         """Get event details from sheets."""
         # TODO: Implement actual event details retrieval
-        return {
-            "id": event_id,
-            "title": {"he": "אירוע לדוגמה", "en": "Sample Event"},
-            "date": "2024-02-15",
-            "time": "21:00-04:00",
-            "location": {"he": "תל אביב", "en": "Tel Aviv"},
-            "pricing": {
-                "single": 100,
-                "couple": 200
-            }
-        }
+        return self.event_service.get_event_by_id(event_id)
     
     async def _get_event_type(self, event_id: str) -> str:
         """Get event type from sheets."""
