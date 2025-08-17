@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Union, Tuple
 from enum import Enum
 from .base_service import BaseService
 from .sheets_service import SheetsService
+from .user_service import UserService
 from .file_storage_service import FileStorageService
 from ..models.form_flow import (
     QuestionType, ValidationRuleType, FormState, ValidationRule,
@@ -88,6 +89,7 @@ class FormFlowService(BaseService):
         super().__init__()
         self.sheets_service = sheets_service
         self.file_storage = FileStorageService()
+        self.user_service = UserService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:

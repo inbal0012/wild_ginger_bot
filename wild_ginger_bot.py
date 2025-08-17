@@ -81,7 +81,7 @@ class WildGingerBot:
         print(f"👋 User {user_id} started the bot")
         
         # search if user is already in the sheet
-        user_data = self.user_service.find_user_by_telegram_id(user_id)
+        user_data = self.user_service.get_user_by_telegram_id(user_id)
         if user_data:
             print(f"👋 User {user_id} is already in the sheet")
             await update.message.reply_text(
