@@ -63,7 +63,7 @@ def find_python_processes():
             proc_info = proc.info
             if 'python' in proc_info['name'].lower():
                 cmdline = ' '.join(proc_info['cmdline']) if proc_info['cmdline'] else ''
-                if 'telegram_bot_polling.py' in cmdline:
+                if 'wild_ginger_bot.py' in cmdline:
                     python_processes.append({
                         'pid': proc_info['pid'],
                         'name': proc_info['name'],
