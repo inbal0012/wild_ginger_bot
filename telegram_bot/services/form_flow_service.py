@@ -130,6 +130,7 @@ class FormFlowService(BaseService):
     
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:
         """Initialize question definitions following the form order specification."""
+        skip = Text(he="ניתן לדלג על השאלה. רשמו 'המשך'", en="you can skip the question. write 'continue'")
         # TODO move outside of the class (config file)
         return {
             # 1. Language selection (every time)
@@ -391,10 +392,12 @@ class FormFlowService(BaseService):
             "sexual_orientation_and_gender": QuestionDefinition(
                 question_id="sexual_orientation_and_gender",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הפרופיל המיני שלך?", en="What is your sexual orientation and gender?"),
+                title=Text(he="נטייה מינית ומגדר", en="Sexual orientation and gender"),
                 required=True,
                 save_to="Users",
                 order=12,
+                placeholder=Text(he="למשל: זכר סטרייט, אישה לסבית, אחר", 
+                                 en="for example: male straight, female bi, other"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -406,11 +409,12 @@ class FormFlowService(BaseService):
             "pronouns": QuestionDefinition(
                 question_id="pronouns",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הפרופיל המיני שלך?", en="What is your sexual orientation and gender?"),
+                title=Text(he="מה לשון הפניה שלך?", en="What are your pronouns?"),
                 required=False,
                 save_to="Users",
                 order=13,
-                placeholder=Text(he="למשל: זכר, נקבה, אחר", en="e.g., male, female, other"),
+                placeholder=Text(he=f"למשל: את / אתה / הם\n{skip.he}", 
+                                 en=f"for example: she/he/they\n{skip.en}"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
@@ -446,13 +450,14 @@ class FormFlowService(BaseService):
             "bdsm_declaration": QuestionDefinition(
                 question_id="bdsm_declaration",
                 question_type=QuestionType.SELECT,
-                title=Text(he="מה הפרופיל המיני שלך?", en="What is your sexual orientation and gender?"),
+                title=Text(he='האירוע הינו בדסמ פרנדלי, ויכלול אקטים בדס"מים / מיניים שונים על פי רצון המשתתפים. איני מחוייב.ת להשתתף באף אקט ואסרב בנימוס אם יציעו לי אקט שאיני מעוניין.ת בו', 
+                           en="The event is BDSM friendly, and will include various BDSM / sexual acts according to the wishes of the participants. I am not obliged to participate in any act and will politely refuse an offer for an act that I am not interested in."),
                 required=True,
                 save_to="Registrations",
                 order=15,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="yes", text=Text(he="כמובן", en="of course")),
+                    QuestionOption(value="no", text=Text(he="לא ברור לי הסעיף, אשמח להבהרה", en="I don't understand, please clarify"))
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -464,21 +469,28 @@ class FormFlowService(BaseService):
             # 16. is_play_with_partner_only
             "is_play_with_partner_only": QuestionDefinition(
                 question_id="is_play_with_partner_only",
-                question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם תרצה להשתתף באירוע בלבד עם פרטנר?", en="Would you like to participate in an event with a partner only?"),
+                question_type=QuestionType.SELECT,
+                title=Text(he="האם תהיה מעוניין לשחק אך ורק עם הפרטנר שתגיעו איתו או גם עם אנשים נוספים?", 
+                           en="would you like to play only with the partner you will come with or also with other people?"),
                 required=True,
                 save_to="Registrations",
                 order=16,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="partner_only", text=Text(he="רק עם פרטנר", en="Only with my partner")),
+                    QuestionOption(value="other_people", text=Text(he="גם עם אחרים", en="Also with other people"))
                 ],
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="partner_or_single", value="single", operator="equals")
+                    ]
+                )
             ),
             # 17. desired_play_partners
             "desired_play_partners": QuestionDefinition(
@@ -498,17 +510,22 @@ class FormFlowService(BaseService):
                 ],
                 validation_rules=[
                     ValidationRule(
-                        rule_type=ValidationRuleType.MAX_LENGTH,
-                        params={"max": 200},
-                        error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
+                        rule_type=ValidationRuleType.REQUIRED,
+                        error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals")
+                    ]
+                )
             ),
             # 18. contact_type
             "contact_type": QuestionDefinition(
                 question_id="contact_type",
                 question_type=QuestionType.SELECT,
-                title=Text(he="מה סוג המגע הרצוי?", en="What type of contact would you like?"),
+                title=Text(he="באיזה סוג מגע תהיה מעוניינ.ת?", en="What type of contact would you like?"),
                 required=True,
                 save_to="Registrations",
                 order=18,
@@ -522,13 +539,19 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals")
+                    ]
+                )
             ),
             # 19. contact_type_other
             "contact_type_other": QuestionDefinition(
                 question_id="contact_type_other",
                 question_type=QuestionType.TEXT,
-                title=Text(he="אחר", en="Other"),
+                title=Text(he="אנא פרט לגבי סוג המגע הרצוי", en="Please elaborate on the type of contact you would like"),
                 required=True,
                 save_to="Registrations",
                 order=19,
@@ -536,7 +559,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="not_in")
+                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="equals")
                     ]
                 ),
                 validation_rules=[
@@ -551,13 +574,14 @@ class FormFlowService(BaseService):
             "share_bdsm_interests": QuestionDefinition(
                 question_id="share_bdsm_interests",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם תרצה לשתף אירועים דומים ב-BDSM?", en="Would you like to share events similar to BDSM?"),
+                title=Text(he="אשמח לשמוע על הגבולות והעדפות שלכם", 
+                           en="We would live to hear about your limits and preferences"),
                 required=True,
                 save_to="Registrations",
                 order=20,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="yes", text=Text(he="יאאלה", en="Sure")),
+                    QuestionOption(value="no", text=Text(he="לא מעוניין לשתף", en="Don't want to share"))
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -567,10 +591,11 @@ class FormFlowService(BaseService):
                 ]
             ),
             # 21 limits_preferences_matrix
+            # TODO understand how to do this
             "limits_preferences_matrix": QuestionDefinition(
                 question_id="limits_preferences_matrix",
                 question_type=QuestionType.MULTI_SELECT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
+                title=Text(he="גבולות והעדפות?", en="limits and preferences?"),
                 required=True,
                 save_to="Users",
                 order=21,
@@ -589,11 +614,11 @@ class FormFlowService(BaseService):
             "boundaries_text": QuestionDefinition(
                 question_id="boundaries_text",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
+                title=Text(he="גבולות - טקסט חופשי", en="Boundaries - free text"),
                 required=True,
                 save_to="Users",
                 order=22,
-                placeholder=Text(he="למשל: צליאק, אלרגיה לבוטנים...", en="e.g., celiac, peanut allergy..."),
+                placeholder=Text(he="תרשמו במילים שלכם", en="Write in your own words"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
@@ -606,11 +631,11 @@ class FormFlowService(BaseService):
             "preferences_text": QuestionDefinition(
                 question_id="preferences_text",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
+                title=Text(he="העדפות - טקסט חופשי", en="Preferences - free text"),
                 required=True,
                 save_to="Users",
                 order=23,
-                placeholder=Text(he="למשל: צליאק, אלרגיה לבוטנים...", en="e.g., celiac, peanut allergy..."),
+                placeholder=Text(he="תרשמו במילים שלכם", en="Write in your own words"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
@@ -623,33 +648,34 @@ class FormFlowService(BaseService):
             "bdsm_comments": QuestionDefinition(
                 question_id="bdsm_comments",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
-                required=True,
+                title=Text(he="הערות חופשיות בנושא BDSM", en="Anything else you'd like to share?"),
+                required=False,
                 save_to="Users",
                 order=24,
-                placeholder=Text(he="למשל: צליאק, אלרגיה לבוטנים...", en="e.g., celiac, peanut allergy..."),
-                validation_rules=[
-                    ValidationRule(
-                        rule_type=ValidationRuleType.MAX_LENGTH,
-                        params={"max": 200},
-                        error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
-                    )
-                ]
+                placeholder=Text(he=f"{skip.he}", en=f"{skip.en}"),
             ),
             # 25 food_restrictions
             "food_restrictions": QuestionDefinition(
                 question_id="food_restrictions",
-                question_type=QuestionType.TEXT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
+                question_type=QuestionType.MULTI_SELECT,
+                title=Text(he="האם יש מגבלות אוכל?", en="Are there any food restrictions?"),
                 required=True,
                 save_to="Users",
                 order=25,
-                placeholder=Text(he="למשל: צליאק, אלרגיה לבוטנים...", en="e.g., celiac, peanut allergy..."),
+                options=[
+                    QuestionOption(value="no", text=Text(he="לא", en="No")),
+                    QuestionOption(value="vegetarian", text=Text(he="צמחוני", en="Vegetarian")),
+                    QuestionOption(value="vegan", text=Text(he="טבעוני", en="Vegan")),
+                    QuestionOption(value="kosher", text=Text(he="כשרות", en="Kosher")),
+                    QuestionOption(value="allergies", text=Text(he="אלרגיות", en="Allergies")),
+                    QuestionOption(value="gluten_free", text=Text(he="ללא גלוט", en="Gluten free")),
+                    QuestionOption(value="lactose_free", text=Text(he="ללא לקטוס", en="Lactose free")),
+                    QuestionOption(value="other", text=Text(he="אחר", en="Other"))
+                ],
                 validation_rules=[
                     ValidationRule(
-                        rule_type=ValidationRuleType.MAX_LENGTH,
-                        params={"max": 200},
-                        error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
+                        rule_type=ValidationRuleType.REQUIRED,
+                        error_message=Text(he="אנא בחר לפחות אופציה אחת", en="Please select at least one option")
                     )
                 ]
             ),
@@ -657,11 +683,11 @@ class FormFlowService(BaseService):
             "food_comments": QuestionDefinition(
                 question_id="food_comments",
                 question_type=QuestionType.TEXT,
-                title=Text(he="מה הסוגים הטכנולוגיים שלך?", en="What is your type of technology?"),
-                required=True,
+                title=Text(he="אנא פרטו בנושא הגבלות אוכל", en="Please elaborate on the food restrictions"),
+                required=False,
                 save_to="Users",
                 order=26,
-                placeholder=Text(he="למשל: צליאק, אלרגיה לבוטנים...", en="e.g., celiac, peanut allergy..."),
+                placeholder=Text(he=f"{skip.he}", en=f"{skip.en}"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.MAX_LENGTH,
