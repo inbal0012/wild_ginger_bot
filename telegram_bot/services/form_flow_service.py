@@ -153,15 +153,18 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
-            # 2. Event selection (every time)
-            "event_selection": QuestionDefinition(
-                question_id="event_selection",
-                question_type=QuestionType.SELECT,
-                title=Text(he="לאיזה אירוע תרצה להירשם?", en="To which event would you like to register?"),
+            # 2. Event type
+            "interested_in_event_types": QuestionDefinition(
+                question_id="interested_in_event_types",
+                question_type=QuestionType.MULTI_SELECT,
+                title=Text(he="מה סוגי האירועים שתרצה להשתתף בהם?", en="What type of events would you like to participate in?"),
                 required=True,
-                save_to="Registrations",
+                save_to="Users",
                 order=2,
-                options=self.parse_upcoming_events(),
+                options=[
+                    QuestionOption(value="play", text=Text(he="משחק", en="Play")),
+                    QuestionOption(value="cuddle", text=Text(he="כירבולייה", en="Cuddle"))
+                ],
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -169,18 +172,16 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
-            # 3. Event type
-            "interested_in_event_types": QuestionDefinition(
-                question_id="interested_in_event_types",
-                question_type=QuestionType.MULTI_SELECT,
-                title=Text(he="מה סוגי האירועים שתרצה להשתתף בהם?", en="What type of events would you like to participate in?"),
+            
+            # 3. Event selection (every time)
+            "event_selection": QuestionDefinition(
+                question_id="event_selection",
+                question_type=QuestionType.SELECT,
+                title=Text(he="לאיזה אירוע תרצה להירשם?", en="To which event would you like to register?"),
                 required=True,
-                save_to="Users",
+                save_to="Registrations",
                 order=3,
-                options=[
-                    QuestionOption(value="play", text=Text(he="משחק", en="Play")),
-                    QuestionOption(value="cuddle", text=Text(he="כירבולייה", en="Cuddle"))
-                ],
+                options=self.parse_upcoming_events(),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
