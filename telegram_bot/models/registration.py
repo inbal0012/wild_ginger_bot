@@ -55,6 +55,7 @@ class RegistrationData:
     helper_shifts: str
     wants_to_DM: bool
     DM_shifts: str
+    ginger_first_try: bool = True
     
 @dataclass
 class PartnerInfo:

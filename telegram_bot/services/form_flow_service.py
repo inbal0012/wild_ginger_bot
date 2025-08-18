@@ -72,7 +72,7 @@ class FormState:
     
     def get_completion_percentage(self) -> float:
         """Get form completion percentage."""
-        total_steps = 38
+        total_steps = 37
         completed_steps = len(self.answers)
         return (completed_steps / total_steps) * 100
     
@@ -125,12 +125,12 @@ class FormFlowService(BaseService):
         self.registration_service = RegistrationService(sheets_service)
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
-        self.extra_texts: Dict[str, Text] = self._initialize__extra_text()
+        self.extra_texts: Dict[str, Text] = self._initialize_extra_text()
             
     def set_telegram_bot(self, bot: Bot):
         self.bot = bot
     
-    def _initialize__extra_text(self) -> Dict[str, Text]:
+    def _initialize_extra_text(self) -> Dict[str, Text]:
         """Get extra text for a specific question."""
         return{
             "full_name": Text(he="*פרטים אישיים*\nאיזה כיף שאתה מתעניין באירוע! נעבור על כמה שאלות כל מנת להכיר אותך טוב יותר.", 
@@ -141,7 +141,11 @@ class FormFlowService(BaseService):
             "agree_participant_commitment": Text(he="*חוקים*\n כמעט סוף. בואו נעבור על חוקי הליין, המקום וכו'.", 
                                                 en="*Rules*\n Almost done. Let's go through the line rules, the place, and so on."),
             "wants_to_helper": Text(he="*הלפרים ו DM-ים*\nזהו! סיימנו, אך לפני שאני משחרר אתכם, אשמח לדעת האם תרצו לעזור באירוע (בתמורה להנחה בעלות האירוע)", 
-                                    en="*Helpers and DMs*\nThat's it! We're done, but before I let you go, I'd like to know if you'd like to help at the event (in exchange for a discount on the event's cost)"),            
+                                    en="*Helpers and DMs*\nThat's it! We're done, but before I let you go, I'd like to know if you'd like to help at the event (in exchange for a discount on the event's cost)"),
+            "wants_to_DM": Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
+                                en=f"We will have a team of DMs to preserve the safety of the space and everyone in it so that we can all enjoy ourselves. DM gets a free pair entry"),
+            "completion": Text(he="תודה שנרשמת לאירוע! ניתן להתחיל מחדש בכל עת עם הפקודה /start", 
+                                en="Thank you for filling out the form! You can start over at any time with the /start command")
         }
     
     def _initialize_question_definitions(self) -> Dict[str, QuestionDefinition]:
@@ -811,6 +815,11 @@ class FormFlowService(BaseService):
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא קרא את חוקי הליין היטב ואשר אותם", en="Please read the line rules carefully and agree to them")
+                    ),
+                    ValidationRule(
+                        rule_type=ValidationRuleType.REGEX,
+                        params={"regex": r'זנגביל|ginger'},
+                        error_message=Text(he="אנא קרא את חוקי הליין היטב ואשר אותם", en="Please read the line rules carefully and agree to them")
                     )
                 ]
             ),
@@ -842,7 +851,7 @@ class FormFlowService(BaseService):
                 save_to="Registrations",
                 order=33,
                 placeholder=Text(he=f'על מנת להרים כזאת הפקה אנו זקוקות לעזרה. אם תוכל ותרצי נשמח שתבואו מוקדם / תשארו לעזור לנו לנקות אחרי בתמורה להנחה בעלות האירוע. הלפרים מקבלים 25% הנחה. ניתן לצבור ע"י בחירת שניהם. ', 
-                                 en=f"{skip.en}"),
+                                en=f"{skip.en}"),
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe")),
@@ -855,14 +864,14 @@ class FormFlowService(BaseService):
                     )
                 ]   
             ),
-            # 33 helper_shifts
+            # 34 helper_shifts
             "helper_shifts": QuestionDefinition(
                 question_id="helper_shifts",
                 question_type=QuestionType.SELECT,
                 title=Text(he="מתי אתה/את מעוניין/ת לעזור באירוע?", en="When do you want to help at the event?"),
                 required=True,
                 save_to="Registrations",
-                order=33,
+                order=34,
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
@@ -880,14 +889,14 @@ class FormFlowService(BaseService):
                     ]
                 )
             ),
-            # 34 is_surtified_DM
+            # 35 is_surtified_DM
             "is_surtified_DM": QuestionDefinition(
                 question_id="is_surtified_DM",
                 question_type=QuestionType.BOOLEAN,
                 title=Text(he="האם את/ה DM מוסמך?", en="Are you certified to be a DM?"),
                 required=True,
                 save_to="Users",
-                order=34,
+                order=35,
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
@@ -899,16 +908,16 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
-            # 35 wants_to_DM
+            # 36 wants_to_DM
             "wants_to_DM": QuestionDefinition(
                 question_id="wants_to_DM",
                 question_type=QuestionType.BOOLEAN,
                 title=Text(he="האם תרצו להצטרף לצוות ה-DM-ים?", en="Do you want to be a DM?"),
                 required=True,
                 save_to="Registrations",
-                order=35,
+                order=36,
                 placeholder=Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
-                                 en=f"{skip.en}"),
+                                en=f"{skip.en}"),
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="maybe", text=Text(he="אולי", en="Maybe")),
@@ -927,16 +936,16 @@ class FormFlowService(BaseService):
                     ]
                 )
             ),
-            # 36 DM_shifts
+            # 37 DM_shifts
             "DM_shifts": QuestionDefinition(
                 question_id="DM_shifts",
-                question_type=QuestionType.SELECT,
+                question_type=QuestionType.MULTI_SELECT,
                 title=Text(he="איזה משמרות יכולות להתאים לך?", en="When do you want to be a DM?"),
                 required=True,
                 save_to="Registrations",
-                order=36,
+                order=37,
                 placeholder=Text(he=f"אשתדל לאפשר לכל אחד את הבחירות שלו.", 
-                                 en=f"{skip.en}"),
+                                en=f"{skip.en}"),
                 options=self.parse_DM_shifts(),
                 validation_rules=[
                     ValidationRule(
@@ -1395,6 +1404,21 @@ class FormFlowService(BaseService):
                             "valid": False,
                             "message": rule.error_message.get(form_state.language, "Invalid Facebook link")
                         }
+                        
+                elif rule.rule_type == ValidationRuleType.REGEX:
+                    try:
+                        pattern = rule.params.get("regex")
+                        text = str(answer or "")
+                        reg = re.search(pattern, text)
+                        if reg is None:
+                            self.set_ginger_first_try(form_state.registration_id, False)
+                            return {
+                                    "valid": False,
+                                    "message": rule.error_message.get(form_state.language, "Invalid answer")
+                                }
+                    except Exception as e:
+                        self.log_error(f"Error validating answer: {e}")
+                        return {"valid": False, "message": "Validation error"}
             
             return {"valid": True, "message": ""}
             
@@ -1416,6 +1440,9 @@ class FormFlowService(BaseService):
         except (ValueError, TypeError):
             return False
     
+    def set_ginger_first_try(self, registration_id: str, value: bool):
+        """Set ginger first try for a user."""
+        self.registration_service.set_ginger_first_try(registration_id, value)
 
     async def _get_next_question_for_field(self, current_field: str, form_state: FormState) -> Optional[Dict[str, Any]]:
         """Get the next question after answering a specific field."""
@@ -1471,9 +1498,13 @@ class FormFlowService(BaseService):
         elif question_def.question_id == "agree_place_rules":
             event_details = await self._get_event_details(form_state.event_id)
             await self.send_telegram_text_message(event_details.place_rules, form_state.language, form_state.user_id)
+    
     async def send_telegram_text_message(self, text: str, language: str, user_id: str):
         """Send a text message to a user."""
-        await self.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN)
+        try:    
+            await self.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN)
+        except Exception as e:
+            self.log_error(f"Error sending text message to user {user_id}: {e}")
     
     def get_event_description(self, event_details: EventDTO) -> str:
         """Get event description from event details."""

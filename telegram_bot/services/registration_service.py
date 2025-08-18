@@ -66,3 +66,27 @@ class RegistrationService:
             if row and row[user_id_col] == str(user_id) and row[event_id_col] == str(event_id):
                 return row[self.headers['registration_id']]
         return None
+    
+    def set_ginger_first_try(self, registration_id: str, value: bool):
+        """Set ginger first try for a user."""
+        self.sheets_service.update_cell(registration_id, 'registration_id', "Registrations", 'ginger_first_try', value)
+    
+    async def update_registration_status(self, registration_id: str, status: RegistrationStatus) -> bool:
+        """Update registration status."""
+        try:
+            if isinstance(status, RegistrationStatus):
+                status_value = status.value
+            else:
+                status_value = status
+            
+            result = self.sheets_service.update_cell(
+                registration_id, 
+                'registration_id', 
+                "Registrations", 
+                'status', 
+                status_value
+            )
+            return result
+        except Exception as e:
+            print(f"Error updating registration status: {e}")
+            return False
