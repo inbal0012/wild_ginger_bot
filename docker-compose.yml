@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  wild-ginger-bot:
+    build: .
+    container_name: wild-ginger-bot
+    restart: unless-stopped
+    environment:
+      # Telegram Bot Configuration
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # Google Sheets Configuration
+      - GOOGLE_SHEETS_CREDENTIALS_FILE=/app/credentials/credentials.json
+      - GOOGLE_SHEETS_SPREADSHEET_ID=${GOOGLE_SHEETS_SPREADSHEET_ID}
+      - GOOGLE_SHEETS_RANGE=${GOOGLE_SHEETS_RANGE:-managed!A3:Z1000}
+      
+      # Admin Configuration
+      - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+      
+      # Logging
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    volumes:
+      # Mount credentials directory for Google Sheets authentication
+      - ./credentials:/app/credentials:ro
+      
+      # Mount logs directory for persistent logging
+      - ./logs:/app/logs
+    
+    ports:
+      # Expose port for potential webhook usage (though polling is used)
+      - "8080:8080"
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: wild-ginger-network 

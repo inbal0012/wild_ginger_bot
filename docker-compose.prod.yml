@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  wild-ginger-bot:
+    # Production overrides
+    restart: always
+    environment:
+      # Production logging
+      - LOG_LEVEL=WARNING
+      - PYTHONUNBUFFERED=1
+    
+    volumes:
+      # Only mount necessary volumes for production
+      - ./credentials:/app/credentials:ro
+      - ./logs:/app/logs
+      - bot-data:/app/data
+    
+    # Production resource limits (more restrictive)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Production logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    # Production health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  bot-data:
+    driver: local 

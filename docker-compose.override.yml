@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  wild-ginger-bot:
+    # Development overrides
+    environment:
+      # Development logging
+      - LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+    
+    # Development volumes for live code changes
+    volumes:
+      # Mount source code for development (comment out for production)
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+      
+      # Mount credentials directory for Google Sheets authentication
+      - ./credentials:/app/credentials:ro
+      
+      # Mount logs directory for persistent logging
+      - ./logs:/app/logs
+    
+    # Development ports
+    ports:
+      - "8080:8080"
+      - "5678:5678"  # For debugging if needed
+    
+    # Development command (uncomment to use)
+    # command: ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "run_bot.py"]
+    
+    # Development resource limits (more generous)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5' 

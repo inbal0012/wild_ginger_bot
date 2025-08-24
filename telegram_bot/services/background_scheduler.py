@@ -18,18 +18,12 @@ logger = logging.getLogger(__name__)
 class BackgroundScheduler:
     """Service for handling automated background tasks and reminders"""
     
-    def __init__(self, 
-                 sheets_service: SheetsService = None,
-                 message_service: MessageService = None,
-                 reminder_service: ReminderService = None,
-                 admin_service: AdminService = None):
-        self.sheets_service = sheets_service or SheetsService()
-        self.message_service = message_service or MessageService()
-        self.reminder_service = reminder_service or ReminderService()
-        self.admin_service = admin_service or AdminService()
+    def __init__(self, bot_application: 'Application'):
+        # Bot application reference
+        self.bot = bot_application
         
         # Background task intervals (in seconds)
-        self.intervals = {
+        self.reminder_intervals = {
             'reminder_check': 3600,  # 1 hour
             'partner_pending': 24 * 60 * 60,  # 24 hours
             'payment_pending': 3 * 24 * 60 * 60,  # 3 days
@@ -39,19 +33,13 @@ class BackgroundScheduler:
         }
         
         # Track last reminder times to avoid spam
+        # TODO retrieve from the sheet
         self.last_reminder_check: Dict[str, datetime] = {}
         self.last_weekly_digest: Optional[datetime] = None
-        
-        # Bot application reference
-        self.bot_application: Optional['Application'] = None
-        
+                
         # Background task management
         self.is_running = False
         self.scheduler_task: Optional[asyncio.Task] = None
-    
-    def set_bot_application(self, bot_application: 'Application'):
-        """Set the bot application reference for sending messages"""
-        self.bot_application = bot_application
     
     async def start_background_scheduler(self):
         """Start the background scheduler"""
@@ -59,7 +47,7 @@ class BackgroundScheduler:
             logger.warning("Background scheduler is already running")
             return
         
-        if not self.bot_application:
+        if not self.bot:
             raise ServiceException("Bot application must be set before starting scheduler")
         
         self.is_running = True
@@ -301,7 +289,7 @@ class BackgroundScheduler:
         telegram_user_id = registration.get('telegram_user_id')
         language = registration.get('language', 'en')
         
-        if not telegram_user_id or not self.bot_application:
+        if not telegram_user_id or not self.bot:
             return False
         
         try:
@@ -320,7 +308,7 @@ class BackgroundScheduler:
                     message = f"🔔 Reminder: Still waiting for {missing_names} to complete the form. Use /remind_partner"
             
             # Send message
-            await self.bot_application.bot.send_message(chat_id=telegram_user_id, text=message)
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
             
             # Log the reminder
             await self._log_automatic_reminder(
@@ -340,7 +328,7 @@ class BackgroundScheduler:
         telegram_user_id = registration.get('telegram_user_id')
         language = registration.get('language', 'en')
         
-        if not telegram_user_id or not self.bot_application:
+        if not telegram_user_id or not self.bot:
             return False
         
         try:
@@ -351,7 +339,7 @@ class BackgroundScheduler:
                 message = "💸 Payment reminder: Your registration has been approved! Please complete payment to confirm your spot at the event."
             
             # Send message
-            await self.bot_application.bot.send_message(chat_id=telegram_user_id, text=message)
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
             
             # Log the reminder
             await self._log_automatic_reminder(
@@ -371,7 +359,7 @@ class BackgroundScheduler:
         telegram_user_id = registration.get('telegram_user_id')
         language = registration.get('language', 'en')
         
-        if not telegram_user_id or not self.bot_application:
+        if not telegram_user_id or not self.bot:
             return False
         
         try:
@@ -382,7 +370,7 @@ class BackgroundScheduler:
                 message = "👥 Group is open! Your event group is now open. Come meet others, share vibes, or just lurk quietly if that's your vibe! 🧘"
             
             # Send message
-            await self.bot_application.bot.send_message(chat_id=telegram_user_id, text=message)
+            await self.bot.bot.send_message(chat_id=telegram_user_id, text=message)
             
             # Log the reminder
             await self._log_automatic_reminder(
@@ -423,5 +411,5 @@ class BackgroundScheduler:
             'last_weekly_digest': self.last_weekly_digest.isoformat() if self.last_weekly_digest else None,
             'total_reminder_checks': len(self.last_reminder_check),
             'intervals': self.intervals,
-            'has_bot_application': self.bot_application is not None
+            'has_bot_application': self.bot is not None
         } 

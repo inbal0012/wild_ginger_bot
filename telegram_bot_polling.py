@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from telegram_bot.config import settings
+from telegram_bot.services.form_flow_service import FormFlowService
+from telegram_bot.services.validation_service import ValidationService
 from telegram_bot.services.sheets_service import SheetsService
 
 # Load environment variables from .env file
@@ -939,10 +941,20 @@ def update_partner_complete(submission_id: str, partner_complete: bool = True):
         print(f"❌ Error updating Partner Complete: {e}")
         return False
 
+
+# --- Start of Form Flow Implementation ---
+validation_service = ValidationService()
+form_flow_service = FormFlowService(validation_service, sheets_service)
+
+# --- End of Form Flow Implementation ---
+
 # --- /start command handler ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = str(user.id)
+    
+    # Start the form flow
+    result = await form_flow_service.start_form(user_id)   
     
     # Check if a submission ID was provided
     if context.args:
