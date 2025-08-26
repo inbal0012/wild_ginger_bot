@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any
 
 from telegram_bot.services.sheets_service import SheetsService
-from telegram_bot.models.registration import CreateRegistrationDTO, RegistrationStatus
+from telegram_bot.models.registration import CreateRegistrationDTO, RegistrationStatus, Status
 
 class RegistrationService:
     def __init__(self, sheets_service: SheetsService):
@@ -90,3 +90,32 @@ class RegistrationService:
         except Exception as e:
             print(f"Error updating registration status: {e}")
             return False
+        
+    async def finish_form_flow(self, registration_id: str, status: Status):
+        await self.update_registration_by_registration_id(registration_id, "form_complete", True)
+        await self.update_registration_by_registration_id(registration_id, "status", status.value)
+    
+    async def update_registration_by_registration_id(self, registration_id: str, field: str, value: str) -> bool:
+        """Update registration status."""
+        try:
+            result = self.sheets_service.update_cell(
+                registration_id, 
+                'registration_id', 
+                "Registrations", 
+                field, 
+                value
+            )
+            return result
+        except Exception as e:
+            print(f"Error updating registration status: {e}")
+            return False
+        
+    async def update_registration_by_user_event(self, user_id: str, event_id: str, field: str, value: str) -> bool:
+        """Update registration status."""
+        registration_id = self.get_registration_id_by_user_id(user_id, event_id)
+        if not registration_id:
+            return False
+        
+        return await self.update_registration_by_registration_id(registration_id, field, value)
+        
+    

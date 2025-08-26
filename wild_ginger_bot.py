@@ -238,6 +238,28 @@ class WildGingerBot:
 
         # Set up command autocomplete for better user experience
     
+    # --- /register command handler ---
+    async def register(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+
+        user_id = self.get_user_from_update(update)
+        print(f"👋 User {user_id} checked register")
+        
+        # TODO: search if user is already in the sheet
+        # TODO: if user is already in the sheet, start the form flow skip language selection
+        # TODO: if user is not in the sheet, create a new user and start the form flow
+        # user_data = self.user_service.get_user_by_telegram_id(user_id)
+                
+        # Start the form flow
+        question = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
+        if question:
+            await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
+        else:
+            print(f"❌ Error: Could not start form for user {user.id}")
+        
+        print(f"👋 Form flow result: {question}")
+        return
+    
     async def handle_poll_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle poll answer updates"""
         poll_answer = update.poll_answer
@@ -260,9 +282,11 @@ class WildGingerBot:
         # Handle the poll answer in the form flow service
         next_question = await self.form_flow_service.handle_poll_answer(poll_info['question_field'], str(user_id), selected_options)
         if next_question:
-            await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))
-        else:
-            print(f"👋 User {user_id} completed the form")
+            if isinstance(next_question, QuestionDefinition):
+                await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+            else:
+                # await update.message.reply_text(next_question['message'])
+                await self.app.bot.send_message(user_id, next_question['message'])
     
     async def handle_text_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle all text messages"""
@@ -404,6 +428,7 @@ class WildGingerBot:
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("status", self.status))
         app.add_handler(CommandHandler("help", self.help_command))
+        app.add_handler(CommandHandler("register", self.register))
         # app.add_handler(CommandHandler("remind_partner", remind_partner))
         # app.add_handler(CommandHandler("cancel", cancel_registration))
         # app.add_handler(CommandHandler("get_to_know", get_to_know_command))
@@ -450,6 +475,7 @@ class WildGingerBot:
             BotCommand("start", "Link your registration or get welcome message"),
             BotCommand("status", "Check your registration progress"),
             BotCommand("help", "Show help and available commands"),
+            BotCommand("register", "Register for an event"),
             # BotCommand("cancel", "Cancel your registration with reason"),
             # BotCommand("remind_partner", "Send reminder to partner(s)"),
             # BotCommand("get_to_know", "Complete the get-to-know section"),

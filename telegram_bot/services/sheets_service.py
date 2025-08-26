@@ -354,7 +354,7 @@ class SheetsService:
                 if len(row) > submission_id_col and row[submission_id_col] == submission_id:
                     sheet_row = row_index + 4  # Adjust for header row and 0-based indexing
                     
-                    col_letter = self._column_index_to_letter(target_col)
+                    col_letter = self.column_index_to_letter(target_col)
                     range_name = f"Old_Registrations!{col_letter}{sheet_row}"
                     
                     result = self.spreadsheet.spreadsheets().values().update(

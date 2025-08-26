@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict
+from datetime import datetime
 
 @dataclass
 class UserDTO:
@@ -30,6 +31,8 @@ class CreateUserFromTelegramDTO:
     telegram_user_id: str
     telegram_username: str
     language: str
+    created_at: str = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    updated_at: str = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
     
     def __init__(self, full_name: str, telegram_user_id: str, telegram_username: str, language: str):
         self.full_name = full_name

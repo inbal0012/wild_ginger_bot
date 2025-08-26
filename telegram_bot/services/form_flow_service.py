@@ -23,7 +23,7 @@ from ..models.form_flow import (
     ValidationResult, FormContext, FormStateData, FormProgress, FormData,
     UpdateableFieldDTO, UpdateResult
 )
-from ..models.registration import CreateRegistrationDTO, RegistrationStatus
+from ..models.registration import CreateRegistrationDTO, RegistrationStatus, Status
 from ..models.event import EventDTO
 from ..utils.validate_social_link import validate_social_link
 from ..utils.utils import str_to_Text
@@ -39,6 +39,7 @@ class FormState:
         self.current_question = "language"
         self.answers: Dict[str, Any] = {}
         self.completed = False
+        self.completion_date = None
         self.created_at = asyncio.get_event_loop().time()
         self.updated_at = asyncio.get_event_loop().time()
     
@@ -52,8 +53,6 @@ class FormState:
             self.event_id = answer
         elif step == "language":
             self.language = answer
-        elif (step == "would_you_like_to_register" and answer == "no"):
-            self.completed = True
     
     def update_registration_id(self, registration_id: str) -> None:
         self.registration_id = registration_id
@@ -82,6 +81,7 @@ class FormState:
         return {
             "user_id": self.user_id,
             "event_id": self.event_id,
+            "registration_id": self.registration_id,
             "language": self.language,
             "current_question": self.current_question,
             "answers": self.answers,
@@ -143,7 +143,7 @@ class FormFlowService(BaseService):
                                                 en="*Rules*\n Almost done. Let's go through the line rules, the place, and so on."),
             "wants_to_helper": Text(he="*הלפרים ו DM-ים*\nזהו! סיימנו, אך לפני שאני משחרר אתכם, אשמח לדעת האם תרצו לעזור באירוע (בתמורה להנחה בעלות האירוע)", 
                                     en="*Helpers and DMs*\nThat's it! We're done, but before I let you go, I'd like to know if you'd like to help at the event (in exchange for a discount on the event's cost)"),
-            "wants_to_DM": Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
+            "wants_to_DM": Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
                                 en=f"We will have a team of DMs to preserve the safety of the space and everyone in it so that we can all enjoy ourselves. DM gets a free pair entry"),
             "completion": Text(he="תודה שנרשמת לאירוע! ניתן להתחיל מחדש בכל עת עם הפקודה /start", 
                                 en="Thank you for filling out the form! You can start over at any time with the /start command")
@@ -194,7 +194,13 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אירוע", en="Please select an event")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="user_exists", field="interested_in_event_types")
+                    ]
+                )
             ),
             
             # 3. Event selection (every time)
@@ -244,7 +250,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="user_exists", field="telegram_id")
+                        SkipConditionItem(type="user_exists", field="telegram_user_id")
                     ]
                 ),
                 validation_rules=[
@@ -364,7 +370,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="user_exists", field="telegram_id")
+                        SkipConditionItem(type="user_exists", field="facebook_profile")
                     ]
                 ),
                 validation_rules=[
@@ -390,7 +396,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="user_exists", field="telegram_id")
+                        SkipConditionItem(type="user_exists", field="intro_text")
                     ]
                 ),
                 validation_rules=[
@@ -917,7 +923,7 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Registrations",
                 order=36,
-                placeholder=Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
+                placeholder=Text(he=f"לטובת שמירה מיטבית על המרחב ועל מנת שכולנו נוכל גם להנות, נהיה צוות של דיאמים. DM מקבל כניסה זוגית חינם", 
                                 en=f"{skip.en}"),
                 options=[
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
@@ -1120,112 +1126,71 @@ class FormFlowService(BaseService):
         """
         return self.active_forms.get(user_id)
     
-    # async def _get_question(self, step: FormStep, form_state: FormState) -> Dict[str, Any]:
-    #     """Get question for a specific step."""
-    #     if step == FormStep.LANGUAGE_SELECTION:
-    #         return GenericForm.all_fields_dict["language"]
-        
-    #     elif step == FormStep.EVENT_DETAILS:
-    #         # Get event details from sheets
-    #         event_details = await self._get_event_details(form_state.event_id)
-    #         return {
-    #             "type": "event_info",
-    #             "event": event_details,
-    #             "text": {
-    #                 "he": "האם תרצה/י להרשם לאירוע זה?",
-    #                 "en": "Would you like to register for this event?"
-    #             },
-    #             "options": [
-    #                 {"value": "yes", "text": {"he": "כן", "en": "Yes"}},
-    #                 {"value": "no", "text": {"he": "לא", "en": "No"}}
-    #             ],
-    #             "required": True
-    #         }
-        
-    #     elif step == FormStep.PERSONAL_INFO:
-    #         return {
-    #             "type": "personal_info",
-    #             "fields": [
-    #                 {
-    #                     "name": "full_name",
-    #                     "type": "text",
-    #                     "label": {"he": "שם מלא", "en": "Full Name"},
-    #                     "required": True
-    #                 },
-    #                 {
-    #                     "name": "telegram_username",
-    #                     "type": "text",
-    #                     "label": {"he": "שם משתמש בטלגרם", "en": "Telegram Username"},
-    #                     "placeholder": {"he": "@username או t.me/username", "en": "@username or t.me/username"},
-    #                     "required": True
-    #                 },
-    #                 {
-    #                     "name": "previous_participation",
-    #                     "type": "choice",
-    #                     "label": {"he": "האם השתתפת בעבר באירועי Wild Ginger?", "en": "Have you participated in Wild Ginger events before?"},
-    #                     "options": [
-    #                         {"value": "yes", "text": {"he": "כן", "en": "Yes"}},
-    #                         {"value": "no", "text": {"he": "לא", "en": "No"}}
-    #                     ],
-    #                     "required": True
-    #                 },
-    #                 {
-    #                     "name": "balance_status",
-    #                     "type": "choice",
-    #                     "label": {"he": "האם מגיע/ה לבד או באיזון?", "en": "Are you coming alone or with a partner?"},
-    #                     "options": [
-    #                         {"value": "single", "text": {"he": "לבד", "en": "Alone"}},
-    #                         {"value": "partner", "text": {"he": "באיזון", "en": "With Partner"}}
-    #                     ],
-    #                     "required": True
-    #                 }
-    #             ]
-    #         }
-        
-    #     # Add more steps as needed...
-    #     return {"type": "unknown", "text": "Unknown step"}
     
-    # async def _get_next_step(self, current_question: str, answer: Any, form_state: FormState) -> str:
-    #     """Determine the next step based on current step and answer."""
-    #     if current_question == FormStep.LANGUAGE_SELECTION:
-    #         form_state.language = answer
-    #         return "event_details"
-        
-    #     elif current_question == FormStep.EVENT_DETAILS:
-    #         if answer == "no":
-    #             return "completion"
-    #         return "personal_info"
-        
-    #     elif current_question == FormStep.PERSONAL_INFO:
-    #         # Check if event-specific questions are needed
-    #         event_type = await self._get_event_type(form_state.event_id)
-    #         if event_type == "play":
-        #             return "event_specific"
-    #         else:
-    #             return "food_alcohol"
-        
-    #     # Add more step logic...
-    #     return "completion"
+    async def _update_form_completion_status(self, form_state: FormState) -> bool:
+        """Update form completion status in Google Sheets."""
+        try:
+            if not form_state.registration_id:
+                self.log_error(f"No registration ID for user {form_state.user_id}")
+                return False
+            
+            success = await self.registration_service.update_registration_by_registration_id(form_state.registration_id, "form_complete", True)
+            
+            status = Status.PENDING if form_state.get_answer("would_you_like_to_register") == "yes" else Status.UNINTERESTED
+            success = await self.registration_service.update_registration_by_registration_id(form_state.registration_id, "status", status.value)
+                        
+            if success:
+                self.log_info(f"Updated form completion status for registration {form_state.registration_id}")
+            else:
+                self.log_error(f"Failed to update form completion status for registration {form_state.registration_id}")
+            
+            return success
+            
+        except Exception as e:
+            self.log_error(f"Error updating form completion status for {form_state.user_id}: {e}")
+            return False
     
-    # async def _validate_step_answer(self, step: FormStep, answer: Any, form_state: FormState) -> Dict[str, Any]:
-    #     """Validate answer for a specific step."""
-    #     if step == FormStep.LANGUAGE_SELECTION:
-    #         if answer not in ["he", "en"]:
-    #             return {
-    #                 "valid": False,
-    #                 "message": {"he": "אנא בחר/י שפה", "en": "Please select a language"}
-    #             }
-        
-    #     elif step == FormStep.TELEGRAM_USERNAME:
-    #         # Validate Telegram username format
-    #         is_valid, error_msg = self.validate_telegram_username(answer)
-    #         if not is_valid:
-    #             return {
-    #                 "valid": False,
-    #                 "message": {"he": error_msg, "en": error_msg}
-    #             }
-        
-    #     return {"valid": True, "message": ""}
+    async def _handle_special_completion_logic(self, form_state: FormState) -> None:
+        """Handle special completion logic based on form answers."""
+        try:
+            # Handle "would_you_like_to_register = no" case
+            if form_state.get_answer("would_you_like_to_register") == "no":
+                self.log_info(f"User {form_state.user_id} chose not to register - marking as not interested")
+                # Could add special handling here like sending a different message
+                return
+            
+            # Handle returning participant logic
+            if form_state.get_answer("returning_participant") == "yes":
+                self.log_info(f"User {form_state.user_id} is a returning participant - auto-marking get-to-know complete")
+                # Auto-mark get-to-know complete for returning participants
+                await self._auto_mark_get_to_know_complete(form_state)
+            
+            # Handle partner registration logic
+            if form_state.get_answer("partner_or_single") == "partner":
+                partner_link = form_state.get_answer("partner_telegram_link")
+                if partner_link:
+                    self.log_info(f"User {form_state.user_id} has partner {partner_link} - will need partner completion")
+                    # add partner reg link to message
+                    return {
+                        "message": f"המשך להרשמה של בעלת החברה: {partner_link}",
+                        "partner_link": partner_link
+                    }
+                    # Could trigger partner notification here
+            
+        except Exception as e:
+            self.log_error(f"Error handling special completion logic for {form_state.user_id}: {e}")
+    
+    
+    def _create_partner_registration_link(self, form_state: FormState) -> str:
+        """Get partner link from form state."""
+        return f"https://t.me/{form_state.get_answer('partner_telegram_link')}?text={self._create_partner_registration_message(form_state)}"
+    
+    def _create_partner_registration_message(self, form_state: FormState) -> str:
+        """Get partner link from form state."""
+        if form_state.get_language() == "he":
+            return f"המשך להרשמה של בעלת החברה: {self._create_partner_registration_link(form_state)}"
+        else:
+            return f"Continue to partner registration: {self._create_partner_registration_link(form_state)}"
     
     async def _get_event_details(self, event_id: str) -> EventDTO:
         """Get event details from sheets."""
@@ -1238,18 +1203,100 @@ class FormFlowService(BaseService):
         return "play"  # Default for testing
     
     async def _complete_form(self, form_state: FormState) -> Dict[str, Any]:
-        """Handle form completion."""
-        # TODO
-        return {
-            "completed": True,
-            "form_id": f"{form_state.user_id}_{form_state.event_id}",
-            "answers": form_state.answers,
-            "message": {
+        """Handle form completion with comprehensive workflow."""
+        try:
+            self.log_info(f"Starting form completion for user {form_state.user_id}")
+            
+            # 1. Mark form as completed in memory
+            form_state.completed = True
+            form_state.completion_date = datetime.now()
+            
+            # 2. Update form completion status in Google Sheets
+            form_complete_updated = await self._update_form_completion_status(form_state)
+            if not form_complete_updated:
+                self.log_error(f"Failed to update form completion status for {form_state.user_id}")
+                # Don't fail the entire completion, just log the error
+                        
+            # 3. Handle special completion logic based on answers
+            await self._handle_special_completion_logic(form_state)
+            
+            # 4. Send completion message to user
+            completion_message = await self._get_completion_message(form_state)
+            
+            # 5. Clean up form state from memory and save to file storage
+            form = self.active_forms.pop(str(form_state.user_id), None)
+            self.save_active_forms()
+            
+            # 6. Log completion
+            self.log_info(f"Form completed successfully for user {form_state.user_id}")
+            
+            return {
+                "completed": True,
+                "form_id": f"{form_state.user_id}_{form_state.event_id}",
+                "registration_id": form_state.registration_id,
+                "user_id": form_state.user_id,
+                "answers": form_state.answers,
+                "message": completion_message,
+                "completion_date": form_state.completion_date.isoformat()
+            }
+            
+        except Exception as e:
+            self.log_error(f"Error completing form for user {form_state.user_id}: {e}")
+            return self._create_error_response(f"Form completion failed: {str(e)}")
+    
+    async def _auto_mark_get_to_know_complete(self, form_state: FormState) -> bool:
+        """Auto-mark get-to-know complete for returning participants."""
+        try:
+            if not form_state.registration_id:
+                return False
+            
+            from telegram_bot_polling import update_get_to_know_complete
+            success = update_get_to_know_complete(form_state.registration_id, True)
+            
+            if success:
+                self.log_info(f"Auto-marked get-to-know complete for returning participant {form_state.user_id}")
+            else:
+                self.log_error(f"Failed to auto-mark get-to-know complete for {form_state.user_id}")
+            
+            return success
+            
+        except Exception as e:
+            self.log_error(f"Error auto-marking get-to-know complete for {form_state.user_id}: {e}")
+            return False
+    
+    async def _get_completion_message(self, form_state: FormState) -> Dict[str, str]:
+        """Get appropriate completion message based on form answers."""
+        try:
+            if form_state.get_answer("would_you_like_to_register") == "no":
+                if form_state.get_language() == "he":
+                    return "תודה על העניין שלך! אם תשנה את דעתך, אתה תמיד יכול לחזור ולהרשם."
+                else:
+                    return "Thank you for your interest! If you change your mind, you can always come back and register."
+            
+            # Default completion message
+            if form_state.get_language() == "he":
+                return "🎉 תודה על ההרשמה! הטופס הושלם בהצלחה.\n\nנציג יצור איתך קשר בקרוב עם פרטים נוספים על האירוע.\n\nאתה יכול לבדוק את הסטטוס שלך בכל זמן עם הפקודה /status"
+            else:
+                return "🎉 Thank you for registering! The form has been completed successfully.\n\nA representative will contact you soon with more details about the event.\n\nYou can check your status anytime using the /status command"
+            
+        except Exception as e:
+            self.log_error(f"Error getting completion message for {form_state.user_id}: {e}")
+            return {
                 "he": "תודה על ההרשמה! נציג יצור איתך קשר בקרוב.",
                 "en": "Thank you for registering! A representative will contact you soon."
             }
-        } 
-        
+    
+    def _create_error_response(self, error_message: str) -> Dict[str, Any]:
+        """Create error response for form completion."""
+        return {
+            "completed": False,
+            "error": error_message,
+            "message": {
+                "he": "אירעה שגיאה בהשלמת הטופס. אנא נסה שוב או פנה לתמיכה.",
+                "en": "An error occurred while completing the form. Please try again or contact support."
+            }
+        }
+    
     async def handle_poll_answer(self, question_field: str, user_id: str, selected_options: List[int]):
         """Handle poll answer from Telegram."""
         try:
@@ -1370,6 +1417,13 @@ class FormFlowService(BaseService):
                             "valid": False,
                             "message": rule.error_message.get(form_state.language, "Invalid date")
                         }
+                    try:
+                        birth_date = datetime.strptime(answer, "%d/%m/%Y")
+                    except (ValueError, TypeError):
+                        return {
+                            "valid": False,
+                            "message": rule.error_message.get(form_state.language, "Invalid date")
+                        }
                         
                 elif rule.rule_type == ValidationRuleType.AGE_RANGE:
                     if not self._validate_age_range(answer, rule.params):
@@ -1455,8 +1509,8 @@ class FormFlowService(BaseService):
             
             current_order = current_question.order
                         
-            # Check if this is the last question (order 37)
-            if current_order >= len(self.question_definitions):
+            # Check if this is the last question (order 37) or if the user doesn't want to register
+            if current_order >= len(self.question_definitions) or form_state.get_answer("would_you_like_to_register") == "no":
                 return await self._complete_form(form_state)
             
             # Find the next question in order
@@ -1535,8 +1589,8 @@ class FormFlowService(BaseService):
 
 * ההרשמה באיזון משחקי. (כלומר מישהו שאתם מתכוונים לשחק איתו)
 אנו מברכים שילובים או עירבובים לפי רצון המשתתפים. אך מצפים שתביאו חטיף מהבית ולא שתבואו לצוד באירוע.
-** כל אירועינו הינם להטבק פרנדלי, ואנו עושות את המיטב כדי לייצר מרחב נעים ומזמין לאנשימות מכל הקשת. 🏳️‍🌈💖
-*** הרשמה בטופס זה אינה מהווה אישור הגעה. זאת הזמנה ובדיקת עניין בלבד. במידה ויש התאמה נחזור אליך. 🙃😊
+** כל אירועינו הינם להטבק פרנדלי, ואנו עושות את המיטב כדי לייצר מרחב נעים ומזמין לאנשימות מכל הקשת. 🏳️‍🌈��
+*** הרשמה בטופס זה אינה מהווה אישור הגעה. זאת הזמנה ובדיקת עניין בלבד. במידה ויש התאמה נחזור אליך. 🙃😊
 
     '''
     
@@ -1560,7 +1614,8 @@ class FormFlowService(BaseService):
                     # Check if user exists in sheets
                     user_data = self.user_service.get_user_by_telegram_id(form_state.user_id)
                     if user_data:
-                        if user_data[self.user_service.headers[question_def.question_id]] == condition.value:
+                        data = user_data[self.user_service.headers[condition.field]]
+                        if data != "":
                             return True
                 
                 elif condition.type == "event_type":

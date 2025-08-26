@@ -15,6 +15,23 @@ class RegistrationStatus(Enum):
     GROUP_OPENED = "group_opened"
     CANCELLED = "cancelled"
 
+class Status(Enum):
+    # pending, approved, rejected, cancelled, uninterested
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+    UNINTERESTED = "uninterested"
+
+class RegistrationStage(Enum):
+    # form, partner form, get to know, payment, group, arrived
+    FORM = "form"
+    PARTNER_FORM = "partner_form"
+    GET_TO_KNOW = "get_to_know"
+    PAYMENT = "payment"
+    GROUP = "group"
+    ARRIVED = "arrived"
+
 @dataclass
 class CreateRegistrationDTO:
     user_id: str
@@ -55,7 +72,14 @@ class RegistrationData:
     helper_shifts: str
     wants_to_DM: bool
     DM_shifts: str
+    get_to_know_status: str 
+    payment_status: str
+    payment_method: str
+    payment_date: str
+    group_status: str
+    arrived: bool
     ginger_first_try: bool = True
+    form_complete: bool = False
     
 @dataclass
 class PartnerInfo:

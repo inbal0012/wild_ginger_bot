@@ -18,12 +18,7 @@ We have successfully extracted the hardcoded question definitions from the `Form
 - **Validation system** - Automatically validates configurations on startup
 - **Export functionality** - Can export Python configurations to JSON format
 
-### 3. Updated Service
-
-- **`telegram_bot/services/form_flow_service_new.py`** - Updated service that uses the configuration system
-- **Backward compatibility** - Maintains all existing functionality while adding configurability
-
-### 4. Documentation
+### 3. Documentation
 
 - **`CONFIGURATION_GUIDE.md`** - Comprehensive guide for event organizers
 - **`FORM_CONFIGURATION_SUMMARY.md`** - This summary document
