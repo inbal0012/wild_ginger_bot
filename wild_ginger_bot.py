@@ -335,37 +335,40 @@ class WildGingerBot:
     
     async def send_telegram_poll(self, question_field: QuestionDefinition, language: str, user_id: str):
         # TODO: create a telegram poll with the question
-        poll_fields = TelegramPollFields(
-            # id=question_field.question_id,
-            question=question_field.title.get(language),
-            options=self.parse_poll_options(question_field.options, language),
-            is_anonymous=False,
-            allows_multiple_answers=question_field.question_type == QuestionType.MULTI_SELECT
-        )
-        
-        message = await self.app.bot.send_poll(
-            chat_id=user_id,
-            question=poll_fields.question,
-            options=poll_fields.options,
-            is_anonymous=poll_fields.is_anonymous,
-            allows_multiple_answers=poll_fields.allows_multiple_answers
-        )
-        
-        # Store poll data
-        self.poll_data[message.poll.id] = {
-                "id": message.poll.id,
-                "question_field": question_field.question_id,
-                "question": poll_fields.question,
-                "options": poll_fields.options,
-                "chat_id": user_id,
-                "message_id": message.message_id,
-                "creator": user_id,
-                "type": "regular",
-                "votes": {i: [] for i in range(len(poll_fields.options))}
-        }
-            
-        # Save to storage
-        self.save_poll_data(self.poll_data)
+        try:
+            poll_fields = TelegramPollFields(
+                # id=question_field.question_id,
+                question=question_field.title.get(language),
+                options=self.parse_poll_options(question_field.options, language),
+                is_anonymous=False,
+                allows_multiple_answers=question_field.question_type == QuestionType.MULTI_SELECT
+            )
+
+            message = await self.app.bot.send_poll(
+                chat_id=user_id,
+                question=poll_fields.question,
+                options=poll_fields.options,
+                is_anonymous=poll_fields.is_anonymous,
+                allows_multiple_answers=poll_fields.allows_multiple_answers
+            )
+
+            # Store poll data
+            self.poll_data[message.poll.id] = {
+                    "id": message.poll.id,
+                    "question_field": question_field.question_id,
+                    "question": poll_fields.question,
+                    "options": poll_fields.options,
+                    "chat_id": user_id,
+                    "message_id": message.message_id,
+                    "creator": user_id,
+                    "type": "regular",
+                    "votes": {i: [] for i in range(len(poll_fields.options))}
+            }
+
+            # Save to storage
+            self.save_poll_data(self.poll_data)
+        except Exception as e:
+            logger.error(f"Error sending poll: {e}")
             
     def parse_poll_options(self, options: List[QuestionOption], language: str):
         if not options:
