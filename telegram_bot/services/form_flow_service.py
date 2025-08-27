@@ -1200,7 +1200,7 @@ class FormFlowService(BaseService):
     async def _get_event_type(self, event_id: str) -> str:
         """Get event type from sheets."""
         # TODO: Implement actual event type retrieval
-        return "play"  # Default for testing
+        return self.event_service.get_event_type(event_id)
     
     async def _complete_form(self, form_state: FormState) -> Dict[str, Any]:
         """Handle form completion with comprehensive workflow."""
