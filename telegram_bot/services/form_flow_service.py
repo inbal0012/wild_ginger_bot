@@ -3,6 +3,7 @@ FormFlowService - Manages form state and flow for event registrations.
 Handles step-by-step form progression, state management, and validation.
 """
 
+import os
 import asyncio
 import re
 from datetime import datetime
@@ -127,6 +128,7 @@ class FormFlowService(BaseService):
         self.active_forms: Dict[str, FormState] = self.get_active_forms()
         self.question_definitions = self._initialize_question_definitions()
         self.extra_texts: Dict[str, Text] = self._initialize_extra_text()
+        self.admin_chat_id = os.getenv("ADMIN_USER_IDS")
             
     def set_telegram_bot(self, bot: Bot):
         self.bot = bot
@@ -1250,6 +1252,9 @@ class FormFlowService(BaseService):
             # 6. Log completion
             self.log_info(f"Form completed successfully for user {form_state.user_id}")
             
+            # 7. Notify admins about form completion
+            await self.notify_admins(form_state)
+            
             return {
                 "completed": True,
                 "form_id": f"{form_state.user_id}_{form_state.event_id}",
@@ -1263,6 +1268,17 @@ class FormFlowService(BaseService):
         except Exception as e:
             self.log_error(f"Error completing form for user {form_state.user_id}: {e}")
             return self._create_error_response(f"Form completion failed: {str(e)}")
+    
+    async def notify_admins(self, form_state: FormState):
+        """Notify admins about form completion."""
+        message = f"Form completed by user {form_state.user_id}\n"
+        message += f"Event: {form_state.event_id}\n"
+        message += f"Registration ID: {form_state.registration_id}\n"
+        message += f"Answers: \n"
+        for key, value in form_state.answers.items():
+            message += f"\t{key}: {value}\n"
+            
+        await self.bot.send_message(chat_id=self.admin_chat_id, text=message)
     
     async def _auto_mark_get_to_know_complete(self, form_state: FormState) -> bool:
         """Auto-mark get-to-know complete for returning participants."""
