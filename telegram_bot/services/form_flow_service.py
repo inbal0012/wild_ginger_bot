@@ -275,7 +275,7 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Users",
                 order=6,
-                placeholder=Text(he="למשל: משחק בכירבולייה, משחק במשחקים בודדים, משחק במשחקים בצניחה, משחק במשחקים במשחקים בכירבולייה", en="e.g., Play in cuddle, Play in solo, Play in cuddle, Play in bdsm, Play in bdsm in cuddle, Play in bdsm in solo"),
+                # placeholder=Text(he="למשל: משחק בכירבולייה, משחק במשחקים בודדים, משחק במשחקים בצניחה, משחק במשחקים במשחקים בכירבולייה", en="e.g., Play in cuddle, Play in solo, Play in cuddle, Play in bdsm, Play in bdsm in cuddle, Play in bdsm in solo"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
