@@ -396,7 +396,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="user_exists", field="intro_text")
+                        SkipConditionItem(type="user_exists", field="birth_date")
                     ]
                 ),
                 validation_rules=[
@@ -424,13 +424,20 @@ class FormFlowService(BaseService):
                 save_to="Users",
                 order=12,
                 placeholder=Text(he="למשל: זכר סטרייט, אישה לסבית, אחר", 
-                                 en="for example: male straight, female bi, other"),
+                                en="for example: male straight, female bi, other"),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="user_exists", field="sexual_orientation_and_gender")
+                    ]
+                ),
+
             ),
             # 13. pronouns
             "pronouns": QuestionDefinition(
@@ -448,7 +455,13 @@ class FormFlowService(BaseService):
                         params={"max": 200},
                         error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="user_exists", field="pronouns")
+                    ]
+                ),
             ),
             # 14. bdsm_experience
             "bdsm_experience": QuestionDefinition(
@@ -473,12 +486,13 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
+            # TODO bdsm_experience other
             # 15. bdsm_declaration
             "bdsm_declaration": QuestionDefinition(
                 question_id="bdsm_declaration",
                 question_type=QuestionType.SELECT,
                 title=Text(he='האירוע הינו בדסמ פרנדלי, ויכלול אקטים בדס"מים / מיניים שונים על פי רצון המשתתפים. איני מחוייב.ת להשתתף באף אקט ואסרב בנימוס אם יציעו לי אקט שאיני מעוניין.ת בו', 
-                           en="The event is BDSM friendly, and will include various BDSM / sexual acts according to the wishes of the participants. I am not obliged to participate in any act and will politely refuse an offer for an act that I am not interested in."),
+                            en="The event is BDSM friendly, and will include various BDSM / sexual acts according to the wishes of the participants. I am not obliged to participate in any act and will politely refuse an offer for an act that I am not interested in."),
                 required=True,
                 save_to="Registrations",
                 order=15,
@@ -498,7 +512,7 @@ class FormFlowService(BaseService):
                 question_id="is_play_with_partner_only",
                 question_type=QuestionType.SELECT,
                 title=Text(he="האם תהיה מעוניין לשחק אך ורק עם הפרטנר שתגיעו איתו או גם עם אנשים נוספים?", 
-                           en="would you like to play only with the partner you will come with or also with other people?"),
+                            en="would you like to play only with the partner you will come with or also with other people?"),
                 required=True,
                 save_to="Registrations",
                 order=16,
@@ -586,7 +600,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="equals")
+                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="not_in")
                     ]
                 ),
                 validation_rules=[
@@ -602,7 +616,7 @@ class FormFlowService(BaseService):
                 question_id="share_bdsm_interests",
                 question_type=QuestionType.BOOLEAN,
                 title=Text(he="אשמח לשמוע על הגבולות והעדפות שלכם", 
-                           en="We would live to hear about your limits and preferences"),
+                            en="We would live to hear about your limits and preferences"),
                 required=True,
                 save_to="Registrations",
                 order=20,
@@ -707,8 +721,8 @@ class FormFlowService(BaseService):
                     QuestionOption(value="vegan", text=Text(he="טבעוני", en="Vegan")),
                     QuestionOption(value="kosher", text=Text(he="כשרות", en="Kosher")),
                     QuestionOption(value="allergies", text=Text(he="אלרגיות", en="Allergies")),
-                    QuestionOption(value="gluten_free", text=Text(he="ללא גלוט", en="Gluten free")),
-                    QuestionOption(value="lactose_free", text=Text(he="ללא לקטוס", en="Lactose free")),
+                    QuestionOption(value="gluten_free", text=Text(he="ללא גלוטן", en="Gluten free")),
+                    QuestionOption(value="lactose_free", text=Text(he="ללא לקטוז", en="Lactose free")),
                     QuestionOption(value="other", text=Text(he="אחר", en="Other"))
                 ],
                 validation_rules=[
@@ -733,7 +747,13 @@ class FormFlowService(BaseService):
                         params={"max": 200},
                         error_message=Text(he="הטקסט ארוך מדי. אנא קצר", en="Text is too long. Please shorten")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="food_restrictions", operator="equals", value="no")
+                    ]
+                )
             ),
             # 27 alcohol_in_event
             "alcohol_in_event": QuestionDefinition(
@@ -1513,6 +1533,10 @@ class FormFlowService(BaseService):
             if current_order >= len(self.question_definitions) or form_state.get_answer("would_you_like_to_register") == "no":
                 return await self._complete_form(form_state)
             
+            # skip BDSM for cuddles
+            if current_order == 13 and self.event_service.get_event_type(form_state.event_id) == "cuddle":
+                current_order = self.question_definitions["food_restrictions"].order
+            
             # Find the next question in order
             next_question = None
             for field_name, question_def in self.question_definitions.items():
@@ -1653,7 +1677,7 @@ class FormFlowService(BaseService):
                 return await self.save_event_selection_to_sheets(user_id, answer)
             elif question_def.question_id == "relevent_experience":
                 event_type = await self._get_event_type(self.active_forms[user_id].event_id)
-                answer = str({event_type: answer})
+                return await self.user_service.save_relevent_experience(user_id, event_type, answer)
             
             # Determine which table to save to based on save_to field
             if question_def.save_to == "Users":

@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any
+import ast
 
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.models.user import CreateUserFromTelegramDTO
@@ -46,3 +47,24 @@ class UserService:
         
         return result
         
+    async def update_user_field(self, user_id: str, field: str, value: str):
+        return await self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", field, value)
+    
+    async def save_relevent_experience(self, user_id: str, event_type: str, answer: str):
+        user = self.get_user_by_telegram_id(user_id)
+        if user:
+            user_experience = user[self.headers["relevent_experience"]]
+            if user_experience:
+                if isinstance(user_experience, str):
+                    # if the experience is a string, convert it to a dictionary
+                    user_experience = ast.literal_eval(user_experience)
+                
+            if event_type not in user_experience:
+                user_experience[event_type] = answer
+            else:
+                user_experience[event_type] = answer
+            
+            await self.update_user_field(user_id, "relevent_experience", str(user_experience))
+            return True
+        return False
+    
