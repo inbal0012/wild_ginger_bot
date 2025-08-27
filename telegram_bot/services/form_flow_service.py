@@ -265,9 +265,9 @@ class FormFlowService(BaseService):
                     )
                 ]
             ),
-            # 6. relevent experience
-            "relevent_experience": QuestionDefinition(
-                question_id="relevent_experience",
+            # 6. relevant experience
+            "relevant_experience": QuestionDefinition(
+                question_id="relevant_experience",
                 question_type=QuestionType.TEXT,
                 title=Text(he="מה רמת הניסיון שלך באירועים דומים?", en="What is your experience with similar events?"),
                 required=True,
@@ -1675,9 +1675,9 @@ class FormFlowService(BaseService):
             
             if question_def.question_id == "event_selection":
                 return await self.save_event_selection_to_sheets(user_id, answer)
-            elif question_def.question_id == "relevent_experience":
+            elif question_def.question_id == "relevant_experience":
                 event_type = await self._get_event_type(self.active_forms[user_id].event_id)
-                return await self.user_service.save_relevent_experience(user_id, event_type, answer)
+                return await self.user_service.save_relevant_experience(user_id, event_type, answer)
             
             # Determine which table to save to based on save_to field
             if question_def.save_to == "Users":

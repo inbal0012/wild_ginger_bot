@@ -50,10 +50,10 @@ class UserService:
     async def update_user_field(self, user_id: str, field: str, value: str):
         return await self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", field, value)
     
-    async def save_relevent_experience(self, user_id: str, event_type: str, answer: str):
+    async def save_relevant_experience(self, user_id: str, event_type: str, answer: str):
         user = self.get_user_by_telegram_id(user_id)
         if user:
-            user_experience = user[self.headers["relevent_experience"]]
+            user_experience = user[self.headers["relevant_experience"]]
             if user_experience:
                 if isinstance(user_experience, str):
                     # if the experience is a string, convert it to a dictionary
@@ -64,7 +64,7 @@ class UserService:
             else:
                 user_experience[event_type] = answer
             
-            await self.update_user_field(user_id, "relevent_experience", str(user_experience))
+            await self.update_user_field(user_id, "relevant_experience", str(user_experience))
             return True
         return False
     

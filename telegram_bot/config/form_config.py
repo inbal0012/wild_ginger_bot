@@ -129,8 +129,8 @@ class FormConfig:
             ),
             
             # 6. relevant experience
-            "relevent_experience": QuestionDefinition(
-                question_id="relevent_experience",
+            "relevant_experience": QuestionDefinition(
+                question_id="relevant_experience",
                 question_type=QuestionType.TEXT,
                 title=Text(he="מה רמת הניסיון שלך באירועים דומים?", en="What is your experience with similar events?"),
                 required=True,

@@ -57,7 +57,7 @@ class TestFormCompletion:
             "interested_in_event_types": "play",
             "would_you_like_to_register": "yes",
             "full_name": "Test User",
-            "relevent_experience": "Some experience",
+            "relevant_experience": "Some experience",
             "partner_or_single": "single",
             "last_sti_test": "01/01/2024",
             "facebook_profile": "https://facebook.com/testuser"
