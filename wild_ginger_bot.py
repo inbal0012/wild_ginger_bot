@@ -92,6 +92,7 @@ class WildGingerBot:
             # TODO
 
         else:
+            self.message_service.get_message(user_data[self.user_service.headers['language']], 'welcome_no_name')
             await self.start_new_user(update, context)
 
         #TODO         
