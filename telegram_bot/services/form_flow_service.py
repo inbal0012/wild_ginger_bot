@@ -343,7 +343,7 @@ class FormFlowService(BaseService):
                 save_to="Registrations",
                 order=9,
                 placeholder=Text(he="DD/MM/YYYY\n\nמארגני הליין אינם מאמתים את מצב הבריאות של המשתתפים/ות, ואינם נושאים בכל אחריות ישירה או עקיפה בנוגע למחלות מין, הדבקה או השלכות רפואיות אחרות.\nבאחריות כל משתתף/ת לוודא את מצב בריאותו/ה ולקיים שיחות בדיקות עם פרטנרים בהתאם לשיקול דעתם האישי.", 
-                                en="DD/MM/YYYY\n\nOrganizers of the line do not verify the health status of participants and bear no direct or indirect responsibility regarding sexually transmitted infections (STIs), transmission, or any other medical consequences.\nEach participant is solely responsible for their own health and for engaging in discussions about test results with partners at their own discretion."),
+                                en="DD/MM/YYYY\n\nThe line organizers do not verify the health status of participants and bear no direct or indirect responsibility regarding sexually transmitted infections (STIs), transmission, or any other medical consequences.\nEach participant is solely responsible for their own health and for engaging in discussions about test results with partners at their own discretion."),
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
