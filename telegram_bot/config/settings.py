@@ -124,14 +124,15 @@ class Settings:
                 },
                 'help': "🤖 Wild Ginger Bot Help\n\n"
                         "Available commands:\n"
-                        "/start - Link your registration or welcome message\n"
+                        "/start - Start your journey with Wild Ginger\n"
                         "/status - Check your registration progress\n"
-                        "/get_to_know - Complete the get-to-know section\n"
-                        "/remind_partner - Send reminder to your partner\n"
+                        # "/get_to_know - Complete the get-to-know section\n"
+                        # "/remind_partner - Send reminder to your partner\n"
                         "/help - Show this help message\n"
-                        "/cancel <reason> - Cancel your registration with reason\n\n"
-                        "To link your registration, use the link provided after filling out the form.\n"
-                        "Example: /start SUBM_12345",
+                        # "/cancel <reason> - Cancel your registration with reason\n\n"
+                        # "To link your registration, use the link provided after filling out the form.\n"
+                        # "Example: /start SUBM_12345",
+                        "you can contact @beloved_kalanit for technical help and more details",
                 'all_partners_complete': "✅ All your partners have already completed the form!",
                 'partner_reminder_sent': "✅ Partner reminder sent successfully!",
                 'partner_reminder_failed': "❌ Failed to send partner reminder."
@@ -162,12 +163,13 @@ class Settings:
                         "פקודות זמינות:\n"
                         "/start - קישור הרשמה או הודעת ברוך הבא\n"
                         "/status - בדיקת התקדמות הרשמה\n"
-                        "/get_to_know - השלמת חלק ההיכרות\n"
-                        "/remind_partner - שליחת תזכורת לשותף\n"
+                        # "/get_to_know - השלמת חלק ההיכרות\n"
+                        # "/remind_partner - שליחת תזכורת לשותף\n"
                         "/help - הצגת הודעת עזרה זו\n"
-                        "/cancel <סיבה> - ביטול הרשמה עם סיבה\n\n"
-                        "כדי לקשר את הרשמתך, השתמש בקישור שניתן לאחר מילוי הטופס.\n"
-                        "דוגמה: /start SUBM_12345",
+                        # "/cancel <סיבה> - ביטול הרשמה עם סיבה\n\n"
+                        # "כדי לקשר את הרשמתך, השתמש בקישור שניתן לאחר מילוי הטופס.\n"
+                        # "דוגמה: /start SUBM_12345",
+                        "ניתן לפנות ל @beloved_kalanit לעזרה טכנית ובירורים נוספים",
                 'all_partners_complete': "✅ כל הפרטנרים שלך כבר השלימו את הטופס!",
                 'partner_reminder_sent': "✅ תזכורת הפרטנר נשלחה בהצלחה!",
                 'partner_reminder_failed': "❌ נכשל בשליחת תזכורת הפרטנר."
