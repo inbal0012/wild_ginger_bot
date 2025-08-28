@@ -1048,6 +1048,31 @@ class FormFlowService(BaseService):
         self.log_info("Shutting down FormFlowService")
         pass
     
+    async def handle_register_start(self, user_id: str, event_id: Optional[str] = None, language: str = "he") -> Dict[str, Any]:
+        try:
+            # Check if user already has an active form
+            if user_id in self.active_forms:
+                self.log_info(f"User {user_id} already has an active form")
+                form_state = self.active_forms[user_id]
+            else:
+                # Create new form state
+                form_state = FormState(user_id, event_id, language)
+                self.active_forms[user_id] = form_state
+                
+                # Save to storage
+                self.save_active_forms()
+            
+            # Get the first question (language selection)
+            first_question_def = await self._get_next_question_for_field("language", form_state)
+            if not first_question_def:
+                raise ValueError("Language question definition not found")
+            
+            return first_question_def
+            
+        except Exception as e:
+            self.log_error(f"Error starting form for user {user_id}: {e}")
+            return None
+        
     async def start_form(self, user_id: str, event_id: Optional[str] = None, language: str = "he") -> Dict[str, Any]:
         """
         Start a new form for a user.

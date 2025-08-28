@@ -252,7 +252,7 @@ class WildGingerBot:
         # user_data = self.user_service.get_user_by_telegram_id(user_id)
                 
         # Start the form flow
-        question = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
+        question = await self.form_flow_service.handle_register_start(str(user.id), language=user['language_code'])
         if question:
             await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
         else:
