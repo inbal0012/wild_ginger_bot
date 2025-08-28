@@ -95,4 +95,9 @@ class EventService:
             return event.event_type
         return None
     
+    def get_event_name_by_id(self, event_id: str) -> str:
+        event = self.get_event_by_id(event_id)
+        if event:
+            return event.name
+        return None
     

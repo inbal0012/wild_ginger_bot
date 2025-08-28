@@ -14,6 +14,8 @@ from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
 from telegram_bot.services.form_flow_service import FormFlowService
 from telegram_bot.services.file_storage_service import FileStorageService
+from telegram_bot.services.registration_service import RegistrationService
+from telegram_bot.services.event_service import EventService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -29,6 +31,8 @@ class WildGingerBot:
     def __init__(self):
         self.sheets_service = SheetsService()
         self.user_service = UserService(self.sheets_service)
+        self.registration_service = RegistrationService(self.sheets_service)
+        self.event_service = EventService(self.sheets_service)
         self.message_service = MessageService()
         self.form_flow_service = FormFlowService(self.sheets_service)
         self.file_storage = FileStorageService()
@@ -178,8 +182,23 @@ class WildGingerBot:
 
     # --- /status command handler ---
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = str(update.effective_user.id)
+        teleg_user = update.effective_user
+        user_id = str(teleg_user.id)
         print(f"👋 User {user_id} checked status")
+        
+        user = self.user_service.get_user_by_telegram_id(user_id)
+        if user:
+            registrations = await self.registration_service.get_all_registrations_for_user(user_id)
+            if registrations:
+                status_message = f"you're registered for {len(registrations)} events:\n"
+                for registration in registrations:
+                    event_name = self.event_service.get_event_name_by_id(registration.event_id)
+                    status_message += f"{event_name}: {registration.status}\n"
+            await update.message.reply_text(
+                status_message
+            )
+        else:
+            await update.message.reply_text(self.message_service.get_message(teleg_user.language_code, 'status_no_name'))
         
         # TODO
         return

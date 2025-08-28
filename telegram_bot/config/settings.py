@@ -106,6 +106,8 @@ class Settings:
                 'welcome_no_name': "Hello there! 👋\nI'm your registration assistant. you can: \n/register to our upcoming events\ncheck your status with /status\nget help with /help",
                 'submission_not_found': "❌ Could not find submission {submission_id}.\nPlease check your submission ID and try again.",
                 'no_submission_linked': "❌ No submission linked to your account.\n\nTo link your form submission, please use the link provided after filling out the registration form.\nIt should look like: `/start SUBM_12345`",
+                'status': "Your registration status:\n{status}\n{status_details}",
+                'status_no_name': "You're not registered for any events. You can register with /register",
                 'status_labels': {
                     'form': "📋 Form",
                     'partner': "🤝 Partner",
@@ -140,6 +142,8 @@ class Settings:
                 'welcome_no_name': "שלום! 👋\nאני עוזר הרשמה שלך. אתה יכול\nלהירשם לאירועים עתידיים באמצעות /register\nלבדוק את הסטטוס שלך באמצעות /status\nלקבל עזרה באמצעות /help",
                 'submission_not_found': "❌ לא הצלחתי למצוא הגשה {submission_id}.\nאנא בדוק את מזהה ההגשה ונסה שוב.",
                 'no_submission_linked': "❌ אין הגשה מקושרת לחשבון שלך.\n\nכדי לקשר את הטופס שלך, אנא השתמש בקישור שניתן לאחר מילוי טופס הרשמה.\nזה צריך להראות כך: `/start SUBM_12345`",
+                'status': "סטטוס הרשמה שלך:\n{status}\n{status_details}",
+                'status_no_name': "אינך רשום לאף אירוע. ניתן להירשם באמצעות /register",
                 'status_labels': {
                     'form': "📋 טופס",
                     'partner': "🤝 שותף",

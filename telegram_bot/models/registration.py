@@ -73,9 +73,6 @@ class RegistrationData:
     wants_to_DM: bool
     DM_shifts: str
     get_to_know_status: str 
-    payment_status: str
-    payment_method: str
-    payment_date: str
     group_status: str
     arrived: bool
     ginger_first_try: bool = True
