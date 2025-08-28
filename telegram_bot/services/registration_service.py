@@ -67,6 +67,81 @@ class RegistrationService:
                 return row[self.headers['registration_id']]
         return None
     
+    def is_user_registered_for_event(self, user_id: str, event_id: str) -> bool:
+        """Check if a user is already registered for a specific event."""
+        try:
+            sheet_data = self.sheets_service.get_data_from_sheet("Registrations")
+            if not sheet_data:
+                return False
+            
+            headers = sheet_data['headers']
+            rows = sheet_data['rows']
+            
+            user_id_col = self.headers['user_id']
+            event_id_col = self.headers['event_id']
+            status_col = self.headers['status']
+            
+            if user_id_col is None or event_id_col is None:
+                print("❌ Could not find required columns in Registrations table")
+                return False
+            
+            for row in rows:
+                if (row and len(row) > max(user_id_col, event_id_col) and 
+                    row[user_id_col] == str(user_id) and 
+                    row[event_id_col] == str(event_id)):
+                    
+                    # Check if the registration is still active (not cancelled, rejected, etc.)
+                    if status_col is not None and len(row) > status_col:
+                        status = row[status_col].lower()
+                        # Consider these statuses as "active" registrations
+                        active_statuses = ['pending', 'form_complete', 'approved', 'confirmed', 'form_incomplete', 'uninterested']
+                        if status in active_statuses:
+                            return True
+                    else:
+                        # If no status column or status is empty, consider it active
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error checking if user is registered for event: {e}")
+            return False
+    
+    def get_user_registration_for_event(self, user_id: str, event_id: str) -> Optional[Dict[str, Any]]:
+        """Get the registration details for a user and event."""
+        try:
+            sheet_data = self.sheets_service.get_data_from_sheet("Registrations")
+            if not sheet_data:
+                return None
+            
+            headers = sheet_data['headers']
+            rows = sheet_data['rows']
+            
+            user_id_col = self.headers['user_id']
+            event_id_col = self.headers['event_id']
+            
+            if user_id_col is None or event_id_col is None:
+                print("❌ Could not find required columns in Registrations table")
+                return None
+            
+            for row in rows:
+                if (row and len(row) > max(user_id_col, event_id_col) and 
+                    row[user_id_col] == str(user_id) and 
+                    row[event_id_col] == str(event_id)):
+                    
+                    # Convert row to dict
+                    registration_data = {}
+                    for i, header in enumerate(headers):
+                        if i < len(row) and row[i] is not None:
+                            registration_data[header] = row[i]
+                    return registration_data
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error getting user registration for event: {e}")
+            return None
+    
     def set_ginger_first_try(self, registration_id: str, value: bool):
         """Set ginger first try for a user."""
         self.sheets_service.update_cell(registration_id, 'registration_id', "Registrations", 'ginger_first_try', value)

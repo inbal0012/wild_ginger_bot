@@ -333,7 +333,7 @@ class WildGingerBot:
             return 'en'
     
     async def send_question_as_telegram_message(self, question: QuestionDefinition, language: str, user_id: str):
-        if question.question_type  in (QuestionType.BOOLEAN, QuestionType.SELECT, QuestionType.MULTI_SELECT): # == QuestionType.MULTI_SELECT or question.question_type == QuestionType.SELECT:
+        if question.question_type  in (QuestionType.BOOLEAN, QuestionType.SELECT, QuestionType.MULTI_SELECT):
             # TODO: create a telegram message with the question
             return await self.send_telegram_poll(question, language, user_id)
         else: # if question.question_type == QuestionType.TEXT or question.question_type == QuestionType.DATE:

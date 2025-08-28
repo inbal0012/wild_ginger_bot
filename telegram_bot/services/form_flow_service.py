@@ -1062,6 +1062,31 @@ class FormFlowService(BaseService):
                 # Save to storage
                 self.save_active_forms()
             
+            # Check if user is already registered for this event
+            if event_id:
+                is_registered = self.registration_service.is_user_registered_for_event(user_id, event_id)
+                if is_registered:
+                    existing_registration = self.registration_service.get_user_registration_for_event(user_id, event_id)
+                    self.log_info(f"User {user_id} is already registered for event {event_id}")
+                    
+                    # Return message indicating they're already registered
+                    if language == "he":
+                        message = f"❌ אתה כבר רשום לאירוע זה!\n\n"
+                        message += f"סטטוס: {existing_registration.get('status', 'N/A')}\n\n"
+                        message += "אם אתה רוצה לעדכן את הפרטים שלך, אנא פנה למנהל."
+                    else:
+                        message = f"❌ You are already registered for this event!\n\n"
+                        message += f"Status: {existing_registration.get('status', 'N/A')}\n\n"
+                        message += "If you want to update your details, please contact an administrator."
+                    
+                    return {
+                        "error": True,
+                        "message": message,
+                        "already_registered": True,
+                        "registration_id": existing_registration.get('registration_id'),
+                        "status": existing_registration.get('status')
+                    }
+            
             # Get the first question (language selection)
             first_question_def = await self._get_next_question_for_field("language", form_state)
             if not first_question_def:
@@ -1393,7 +1418,31 @@ class FormFlowService(BaseService):
             form_state.update_answer(question_field, answer)
             
             # Save answer to the appropriate table
-            await self.save_answer_to_sheets(str(user_id), question_field, answer)
+            save_result = await self.save_answer_to_sheets(str(user_id), question_field, answer)
+            
+            # Check if save failed due to re-registration
+            if not save_result and question_field == "event_selection":
+                error_info = form_state.get_answer("event_selection_error")
+                if error_info and error_info.get("already_registered"):
+                    # User is already registered for this event
+                    if form_state.language == "he":
+                        error_message = f"❌ אתה כבר רשום לאירוע זה!\n\n"
+                        error_message += f"מזהה הרשמה: {error_info.get('registration_id', 'N/A')}\n"
+                        error_message += f"סטטוס: {error_info.get('status', 'N/A')}\n\n"
+                        error_message += "אם אתה רוצה לעדכן את הפרטים שלך, אנא פנה למנהל."
+                    else:
+                        error_message = f"❌ You are already registered for this event!\n\n"
+                        error_message += f"Registration ID: {error_info.get('registration_id', 'N/A')}\n"
+                        error_message += f"Status: {error_info.get('status', 'N/A')}\n\n"
+                        error_message += "If you want to update your details, please contact an administrator."
+                    
+                    return {
+                        "error": True,
+                        "message": error_message,
+                        "already_registered": True,
+                        "registration_id": error_info.get('registration_id'),
+                        "status": error_info.get('status')
+                    }
             
             # Save form state
             self.save_active_forms()
@@ -1753,18 +1802,50 @@ class FormFlowService(BaseService):
         """
         Save event selection to the appropriate table based on the question's save_to field.
         """
-        # TODO make sure the event_id is valid
-        # TODO make sure the user_id is valid
-        # TODO make sure the user is not already registered for this event
-        registration = CreateRegistrationDTO(user_id=user_id, event_id=event_id, status=RegistrationStatus.FORM_INCOMPLETE)
-        result = await self.registration_service.create_new_registration(registration)
-        if not result:
-            self.log_error(f"Failed to save event selection to sheets for user {user_id}, event {event_id}")
+        try:
+            # Check if user is already registered for this event
+            is_registered = self.registration_service.is_user_registered_for_event(user_id, event_id)
+            if is_registered:
+                existing_registration = self.registration_service.get_user_registration_for_event(user_id, event_id)
+                self.log_error(f"User {user_id} is already registered for event {event_id}")
+                
+                # if status is form_incomplete
+                if existing_registration['status'] == RegistrationStatus.FORM_INCOMPLETE.value:
+                    self.log_info(f"User {user_id} is already registered for event {event_id} but is form incomplete")
+                    return True
+                elif existing_registration['status'] == RegistrationStatus.UNINTERESTED.value:
+                    self.log_info(f"User {user_id} is already registered for event {event_id} but is uninterested")
+                    self.registration_service.update_registration_status(user_id, event_id, RegistrationStatus.FORM_INCOMPLETE)
+                    return True
+                
+                # Update the form state to indicate the error
+                form_state = self.active_forms.get(user_id)
+                if form_state:
+                    form_state.answers["event_selection_error"] = {
+                        "already_registered": True,
+                        "registration_id": existing_registration.get('registration_id'),
+                        "status": existing_registration.get('status')
+                    }
+                    self.save_active_forms()
+                
+                return False
+            
+            # TODO make sure the event_id is valid
+            # TODO make sure the user_id is valid
+            
+            registration = CreateRegistrationDTO(user_id=user_id, event_id=event_id, status=RegistrationStatus.FORM_INCOMPLETE)
+            result = await self.registration_service.create_new_registration(registration)
+            if not result:
+                self.log_error(f"Failed to save event selection to sheets for user {user_id}, event {event_id}")
+                return False
+            
+            self.active_forms[user_id].registration_id = registration.id
+            self.save_active_forms()
+            return result
+            
+        except Exception as e:
+            self.log_error(f"Error saving event selection to sheets: {e}")
             return False
-        
-        self.active_forms[user_id].registration_id = registration.id
-        self.save_active_forms()
-        return result
     
     async def validate_telegram_username(self, username: str) -> Tuple[bool, str]:
         """
