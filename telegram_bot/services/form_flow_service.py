@@ -1424,6 +1424,9 @@ class FormFlowService(BaseService):
             
             question_def = self.question_definitions[question_field]
             
+            if question_def.question_type == QuestionType.MULTI_SELECT or question_def.question_type == QuestionType.SELECT:
+                return question_def
+            
             # For single select, take the first value
             answer = update.message.text
             
