@@ -896,14 +896,14 @@ class FormFlowService(BaseService):
             # 34 helper_shifts
             "helper_shifts": QuestionDefinition(
                 question_id="helper_shifts",
-                question_type=QuestionType.SELECT,
+                question_type=QuestionType.MULTI_SELECT,
                 title=Text(he="מתי אתה/את מעוניין/ת לעזור באירוע?", en="When do you want to help at the event?"),
                 required=True,
                 save_to="Registrations",
                 order=34,
                 options=[
-                    QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
-                    QuestionOption(value="no", text=Text(he="לא", en="No"))
+                    QuestionOption(value="start", text=Text(he="פתיחה", en="Start")),
+                    QuestionOption(value="end", text=Text(he="סגירה", en="End"))
                 ],
                 validation_rules=[
                     ValidationRule(
