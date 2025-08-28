@@ -102,8 +102,8 @@ class Settings:
         """Load multilingual messages"""
         return {
             'en': {
-                'welcome': "Hello {name}! 👋\nI'm your registration assistant. you can: \n/register to our upcoming events\ncheck your status with /status\nget help with /help",
-                'welcome_no_name': "Hello there! 👋\nI'm your registration assistant. you can: \n/register to our upcoming events\ncheck your status with /status\nget help with /help",
+                'welcome': "Hello {name}! 👋\nI'm your registration assistant. you can: \n/register to our upcoming events\ncheck your status with /status\nget help with /help\n\nto stay updated, join our telegram channel: @WildGingerEvents",
+                'welcome_no_name': "Hello there! 👋\nI'm your registration assistant. you can: \n/register to our upcoming events\ncheck your status with /status\nget help with /help\n\nto stay updated, join our telegram channel: @WildGingerEvents",
                 'submission_not_found': "❌ Could not find submission {submission_id}.\nPlease check your submission ID and try again.",
                 'no_submission_linked': "❌ No submission linked to your account.\n\nTo link your form submission, please use the link provided after filling out the registration form.\nIt should look like: `/start SUBM_12345`",
                 'status': "Your registration status:\n{status}\n{status_details}",
@@ -140,8 +140,8 @@ class Settings:
             },
             'he': {
                 # TODO welcome - hello, welcome to Wild Ginger bot. you can: /register to our upcoming events, check your status with /status, get help with /help
-                'welcome': "שלום {name}! 👋\nאני עוזר הרשמה שלך. אתה יכול\nלהירשם לאירועים עתידיים באמצעות /register\nלבדוק את הסטטוס שלך באמצעות /status\nלקבל עזרה באמצעות /help",
-                'welcome_no_name': "שלום! 👋\nאני עוזר הרשמה שלך. אתה יכול\nלהירשם לאירועים עתידיים באמצעות /register\nלבדוק את הסטטוס שלך באמצעות /status\nלקבל עזרה באמצעות /help",
+                'welcome': "שלום {name}! 👋\nאני עוזר הרשמה שלך. אתה יכול\nלהירשם לאירועים עתידיים באמצעות /register\nלבדוק את הסטטוס שלך באמצעות /status\nלקבל עזרה באמצעות /help\n\nכדי להישאר מעודכנים באירועי הליין, הצטרפו לערוץ הטלגרם שלנו: @WildGingerEvents",
+                'welcome_no_name': "שלום! 👋\nאני עוזר הרשמה שלך. אתה יכול\nלהירשם לאירועים עתידיים באמצעות /register\nלבדוק את הסטטוס שלך באמצעות /status\nלקבל עזרה באמצעות /help\n\nכדי להישאר מעודכנים באירועי הליין, הצטרפו לערוץ הטלגרם שלנו: @WildGingerEvents",
                 'submission_not_found': "❌ לא הצלחתי למצוא הגשה {submission_id}.\nאנא בדוק את מזהה ההגשה ונסה שוב.",
                 'no_submission_linked': "❌ אין הגשה מקושרת לחשבון שלך.\n\nכדי לקשר את הטופס שלך, אנא השתמש בקישור שניתן לאחר מילוי טופס הרשמה.\nזה צריך להראות כך: `/start SUBM_12345`",
                 'status': "סטטוס הרשמה שלך:\n{status}\n{status_details}",
