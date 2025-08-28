@@ -232,6 +232,10 @@ class WildGingerBot:
         user_id = self.get_user_from_update(update)
         print(f"👋 User {user_id} checked help")
         
+        await update.message.reply_text(
+            self.message_service.get_message(self.get_language_from_user(user_id), 'help')
+        )
+
         # TODO
         return
         # Try to get user's language from their submission data first
