@@ -47,13 +47,7 @@ class WildGingerBot:
         
         # create new user in the sheet
         await self.create_new_user(user)
-        
-        # TODO: send welcome message
-        # TODO multi language support
-        await update.message.reply_text(
-            f"Hi {user['first_name']}! nice to meet you!"
-        )
-        
+
         # Start the form flow
         question = await self.form_flow_service.start_form(str(user.id), language=user['language_code'])
         if question:
@@ -81,7 +75,8 @@ class WildGingerBot:
         
     # --- /start command handler ---
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = self.get_user_from_update(update)
+        user = update.effective_user
+        user_id = str(user.id)
         
         print(f"👋 User {user_id} started the bot")
         
@@ -96,7 +91,9 @@ class WildGingerBot:
             # TODO
 
         else:
-            self.message_service.get_message(user_data[self.user_service.headers['language']], 'welcome_no_name')
+            await update.message.reply_text(
+                self.message_service.get_message(user['language_code'], 'welcome_no_name')
+            )            
             await self.start_new_user(update, context)
 
         #TODO         
