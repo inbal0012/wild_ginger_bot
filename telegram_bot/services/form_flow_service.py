@@ -482,6 +482,12 @@ class FormFlowService(BaseService):
                     QuestionOption(value="experienced_bottom", text=Text(he="יש לי נסיון בתור בוטום/נשלט.ת", en="I have experience as a bottom/submissive")),
                     QuestionOption(value="other", text=Text(he="אחר", en="Other"))                
                 ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
+                    ]
+                ),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -503,6 +509,12 @@ class FormFlowService(BaseService):
                     QuestionOption(value="yes", text=Text(he="כמובן", en="of course")),
                     QuestionOption(value="no", text=Text(he="לא ברור לי הסעיף, אשמח להבהרה", en="I don't understand, please clarify"))
                 ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
+                    ]
+                ),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -587,7 +599,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals")
+                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 )
             ),
@@ -603,7 +616,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="not_in")
+                        SkipConditionItem(type="field_value", field="contact_type", value="other", operator="not_in"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 ),
                 validation_rules=[
@@ -627,6 +641,12 @@ class FormFlowService(BaseService):
                     QuestionOption(value="yes", text=Text(he="יאאלה", en="Sure")),
                     QuestionOption(value="no", text=Text(he="לא מעוניין לשתף", en="Don't want to share"))
                 ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
+                    ]
+                ),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -647,6 +667,12 @@ class FormFlowService(BaseService):
                     QuestionOption(value="yes", text=Text(he="כן", en="Yes")),
                     QuestionOption(value="no", text=Text(he="לא", en="No"))
                 ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
+                    ]
+                ),
                 validation_rules=[
                     ValidationRule(
                         rule_type=ValidationRuleType.REQUIRED,
@@ -673,7 +699,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no")
+                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 )
             ),
@@ -696,7 +723,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no")
+                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 )
             ),
@@ -709,6 +737,12 @@ class FormFlowService(BaseService):
                 save_to="Users",
                 order=24,
                 placeholder=Text(he=f"{skip.he}", en=f"{skip.en}"),
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
+                    ]
+                ),
             ),
             # 25 food_restrictions
             "food_restrictions": QuestionDefinition(
