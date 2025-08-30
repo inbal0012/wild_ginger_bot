@@ -2,8 +2,9 @@ from typing import Optional, Dict, Any, List
 
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.models.registration import CreateRegistrationDTO, RegistrationStatus, Status, RegistrationData
+from telegram_bot.services.base_service import BaseService
 
-class RegistrationService:
+class RegistrationService(BaseService):
     def __init__(self, sheets_service: SheetsService):
         self.sheets_service = sheets_service
         self.headers = self.sheets_service.headers["Registrations"]
@@ -49,7 +50,7 @@ class RegistrationService:
 
             return result
         except Exception as e:
-            print(f"Error creating new registration: {e}")
+            self.log_error(f"Error creating new registration: {e}")
             return False
         
     def get_registration_id_by_user_id(self, user_id: str, event_id: str) -> Optional[str]:
@@ -82,7 +83,7 @@ class RegistrationService:
             status_col = self.headers['status']
             
             if user_id_col is None or event_id_col is None:
-                print("❌ Could not find required columns in Registrations table")
+                self.log_error("❌ Could not find required columns in Registrations table")
                 return False
             
             for row in rows:
@@ -104,7 +105,7 @@ class RegistrationService:
             return False
             
         except Exception as e:
-            print(f"❌ Error checking if user is registered for event: {e}")
+            self.log_error(f"❌ Error checking if user is registered for event: {e}")
             return False
     
     def get_user_registration_for_event(self, user_id: str, event_id: str) -> Optional[Dict[str, Any]]:
@@ -121,7 +122,7 @@ class RegistrationService:
             event_id_col = self.headers['event_id']
             
             if user_id_col is None or event_id_col is None:
-                print("❌ Could not find required columns in Registrations table")
+                self.log_error("❌ Could not find required columns in Registrations table")
                 return None
             
             for row in rows:
@@ -139,7 +140,7 @@ class RegistrationService:
             return None
             
         except Exception as e:
-            print(f"❌ Error getting user registration for event: {e}")
+            self.log_error(f"❌ Error getting user registration for event: {e}")
             return None
     
     def set_ginger_first_try(self, registration_id: str, value: bool):
@@ -163,7 +164,7 @@ class RegistrationService:
             )
             return result
         except Exception as e:
-            print(f"Error updating registration status: {e}")
+            self.log_error(f"Error updating registration status: {e}")
             return False
         
     async def finish_form_flow(self, registration_id: str, status: Status):
@@ -182,7 +183,7 @@ class RegistrationService:
             )
             return result
         except Exception as e:
-            print(f"Error updating registration status: {e}")
+            self.log_error(f"Error updating registration status: {e}")
             return False
         
     async def update_registration_by_user_event(self, user_id: str, event_id: str, field: str, value: str) -> bool:

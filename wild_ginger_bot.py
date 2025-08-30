@@ -9,6 +9,7 @@ from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, Ques
 from telegram_bot.models.TelegramPollFields import TelegramPollFields, TelegramPollData
 from telegram_bot.models.user import CreateUserFromTelegramDTO
 
+from telegram_bot.services.base_service import BaseService
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.services.user_service import UserService
 from telegram_bot.services.message_service import MessageService
@@ -23,12 +24,9 @@ load_dotenv()
 # Enable logging
 logger = logging.getLogger(__name__)
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
-
-class WildGingerBot:
+class WildGingerBot(BaseService):
     def __init__(self):
+        super().__init__()
         self.sheets_service = SheetsService()
         self.user_service = UserService(self.sheets_service)
         self.registration_service = RegistrationService(self.sheets_service)
@@ -37,7 +35,18 @@ class WildGingerBot:
         self.form_flow_service = FormFlowService(self.sheets_service)
         self.file_storage = FileStorageService()
         self.poll_data = self.load_poll_data()
+        self.log_info("WildGingerBot initialized successfully")
     
+    async def initialize(self) -> None:
+        """Initialize the service and its dependencies."""
+        self.log_info("Initializing WildGingerBot...")
+        # Any additional initialization can go here
+        
+    async def shutdown(self) -> None:
+        """Clean up resources when shutting down the service."""
+        self.log_info("Shutting down WildGingerBot...")
+        # Any cleanup can go here
+        
     def get_user_from_update(self, update: Update):
         user = update.effective_user
         return str(user.id)        
@@ -53,9 +62,9 @@ class WildGingerBot:
         if question:
             await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
         else:
-            print(f"❌ Error: Could not start form for user {user.id}")
+            self.log_error(f"Could not start form for user {user.id}")
         
-        print(f"👋 Form flow result: {question}")
+        self.log_info(f"Form flow result: {question}")
         
     async def create_new_user(self, user: User):
         user_id = str(user.id)                
@@ -69,21 +78,21 @@ class WildGingerBot:
         )
         result = await self.user_service.create_new_user(new_user)
         if result:
-            print(f"👋 User {user_id} created successfully")
+            self.log_info(f"User {user_id} created successfully")
         else:
-            print(f"❌ Error creating user {user_id} in the sheet")
+            self.log_error(f"Error creating user {user_id} in the sheet")
         
     # --- /start command handler ---
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         user_id = str(user.id)
         
-        print(f"👋 User {user_id} started the bot")
+        self.log_info(f"User {user_id} started the bot")
         
         # search if user is already in the sheet
         user_data = self.user_service.get_user_by_telegram_id(user_id)
         if user_data:
-            print(f"👋 User {user_id} is already in the sheet")
+            self.log_info(f"User {user_id} is already in the sheet")
             await update.message.reply_text(
                 # f"Hi {user['first_name']}! how are you?"
                 self.message_service.get_message(user_data[self.user_service.headers['language']], 'welcome', name=user_data[self.user_service.headers['full_name']])
@@ -181,7 +190,7 @@ class WildGingerBot:
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         teleg_user = update.effective_user
         user_id = str(teleg_user.id)
-        print(f"👋 User {user_id} checked status")
+        self.log_info(f"User {user_id} checked status")
         
         user = self.user_service.get_user_by_telegram_id(user_id)
         if user:
@@ -227,7 +236,7 @@ class WildGingerBot:
     # --- /help command handler ---
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = self.get_user_from_update(update)
-        print(f"👋 User {user_id} checked help")
+        self.log_info(f"User {user_id} checked help")
         
         await update.message.reply_text(
             self.message_service.get_message(self.get_language_from_user(user_id), 'help')
@@ -264,7 +273,7 @@ class WildGingerBot:
         user = update.effective_user
 
         user_id = self.get_user_from_update(update)
-        print(f"👋 User {user_id} checked register")
+        self.log_info(f"User {user_id} checked register")
         
         # TODO: search if user is already in the sheet
         # TODO: if user is already in the sheet, start the form flow skip language selection
@@ -276,9 +285,9 @@ class WildGingerBot:
         if question:
             await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
         else:
-            print(f"❌ Error: Could not start form for user {user.id}")
+            self.log_error(f"Could not start form for user {user.id}")
         
-        print(f"👋 Form flow result: {question}")
+        self.log_info(f"Form flow result: {question}")
         return
     
     async def handle_poll_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -312,7 +321,7 @@ class WildGingerBot:
     async def handle_text_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle all text messages"""
         user_id = self.get_user_from_update(update)
-        print(f"👋 User {user_id} sent a text message")
+        self.log_info(f"User {user_id} sent a text message")
         
         # TODO: handle the text message
         # get the current question from the active forms
@@ -403,7 +412,7 @@ class WildGingerBot:
         
         # Update vote tracking
         poll_info = self.poll_data[poll_id]
-        print(f"Poll info: {poll_info}")
+        self.log_info(f"Poll info: {poll_info}")
         
         # Remove user's previous votes
         for option_id in poll_info['votes']:
@@ -416,7 +425,7 @@ class WildGingerBot:
                 poll_info['votes'][option_id] = []
             poll_info['votes'][option_id].append(user_id)
 
-        print(f"Poll {poll_id}: User {user_id} voted for options {selected_options}")
+        self.log_info(f"Poll {poll_id}: User {user_id} voted for options {selected_options}")
 
         
     def save_poll_data(self, poll_data: Dict[str, TelegramPollData]) -> bool:
@@ -442,13 +451,18 @@ class WildGingerBot:
             return {}
     
     def build_app(self):        
+        self.log_info("Building Telegram application...")
         # --- Bot token from environment variable ---
         BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
         if not BOT_TOKEN:
+            self.log_error("TELEGRAM_BOT_TOKEN environment variable is required")
             raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required. Please set it in your .env file.")
+        
+        self.log_info("Bot token found, creating application...")
 
         app = ApplicationBuilder().token(BOT_TOKEN).build()
     
+        self.log_info("Adding command handlers...")
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("status", self.status))
         app.add_handler(CommandHandler("help", self.help_command))
@@ -476,20 +490,21 @@ class WildGingerBot:
 
         self.app = app
         self.form_flow_service.set_telegram_bot(app.bot)
-        print("Bot is running with polling...")
+        self.log_info("Application built successfully")
+        self.log_info("Bot is running with polling...")
 
         try:
             app.run_polling(drop_pending_updates=False)
         except Exception as e:
             if "Conflict" in str(e):
-                print("❌ Error: Another instance of the bot is already running!")
-                print("Solutions:")
-                print("1. Stop any other running instances of this bot")
-                print("2. Wait a few seconds and try again")
-                print("3. If you have a webhook configured, disable it first")
-                print("4. Check your task manager for other Python processes")
+                self.log_error("Another instance of the bot is already running!")
+                self.log_error("Solutions:")
+                self.log_error("1. Stop any other running instances of this bot")
+                self.log_error("2. Wait a few seconds and try again")
+                self.log_error("3. If you have a webhook configured, disable it first")
+                self.log_error("4. Check your task manager for other Python processes")
             else:
-                print(f"❌ Error starting bot: {e}")
+                self.log_error(f"Error starting bot: {e}")
             exit(1)
 
     
@@ -507,9 +522,9 @@ class WildGingerBot:
         
         try:
             await app.bot.set_my_commands(commands)
-            print("✅ Bot command autocomplete set up successfully")
+            self.log_info("Bot command autocomplete set up successfully")
         except Exception as e:
-            print(f"❌ Error setting up bot commands: {e}")
+            self.log_error(f"Error setting up bot commands: {e}")
     
     # Post-init hook to start background tasks
     async def post_init(self, app: Application):
@@ -521,5 +536,6 @@ class WildGingerBot:
 # --- Main runner ---
 if __name__ == '__main__':
     bot = WildGingerBot()
+    bot.log_info("Starting Wild Ginger Bot...")
     bot.build_app()
     

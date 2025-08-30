@@ -4,8 +4,9 @@ from datetime import datetime
 from ..config.settings import settings
 from ..exceptions import SheetsConnectionException
 from ..models.registration import RegistrationData, RegistrationStatus
+from ..services.base_service import BaseService
 
-class SheetsService:
+class SheetsService(BaseService):
     def __init__(self):
         self.spreadsheet = settings.sheets_service
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
@@ -329,7 +330,7 @@ class SheetsService:
     def _update_cell(self, submission_id: str, column_key: str, value: str) -> bool:
         """Generic method to update a single cell"""
         if not self.spreadsheet:
-            print("⚠️  Google Sheets not available")
+            self.log_warning("⚠️  Google Sheets not available")
             return False
         
         try:
@@ -346,7 +347,7 @@ class SheetsService:
             target_col = column_indices.get(column_key)
             
             if submission_id_col is None or target_col is None:
-                print(f"❌ Could not find required columns in Google Sheets")
+                self.log_error(f"❌ Could not find required columns in Google Sheets")
                 return False
             
             # Find the row with the matching submission ID
@@ -364,20 +365,20 @@ class SheetsService:
                         body={'values': [[value]]}
                     ).execute()
                     
-                    print(f"✅ Updated {column_key} to {value} for submission {submission_id}")
+                    self.log_info(f"✅ Updated {column_key} to {value} for submission {submission_id}")
                     return True
             
-            print(f"❌ Could not find submission {submission_id} in Google Sheets")
+            self.log_error(f"❌ Could not find submission {submission_id} in Google Sheets")
             return False
             
         except Exception as e:
-            print(f"❌ Error updating {column_key}: {e}")
+            self.log_error(f"❌ Error updating {column_key}: {e}")
             return False
 
     def update_cell(self, id: str, id_column: str, sheet_name: str, column_key: str, value: str) -> bool:
         """Generic method to update a single cell"""
         if not self.spreadsheet:
-            print("⚠️  Google Sheets not available")
+            self.log_warning("⚠️  Google Sheets not available")
             return False
         
         try:
@@ -392,7 +393,7 @@ class SheetsService:
             target_col = self.headers[sheet_name][column_key]
             
             if id_col is None or target_col is None:
-                print(f"❌ Could not find required columns in Google Sheets")
+                self.log_error(f"❌ Could not find required columns in Google Sheets")
                 return False
             
             # Find the row with the matching submission ID
@@ -413,14 +414,14 @@ class SheetsService:
                         body={'values': [[value]]}
                     ).execute()
                     
-                    print(f"✅ Updated {column_key} to {value} for user {id}")
+                    self.log_info(f"✅ Updated {column_key} to {value} for user {id}")
                     return result
             
-            print(f"❌ Could not find user {id} in Google Sheets")
+            self.log_error(f"❌ Could not find user {id} in Google Sheets")
             return False
             
         except Exception as e:
-            print(f"❌ Error updating {column_key}: {e}")
+            self.log_error(f"❌ Error updating {column_key}: {e}")
             return False
 
     async def update_telegram_user_id(self, submission_id: str, telegram_user_id: str) -> bool:
@@ -440,7 +441,7 @@ class SheetsService:
         
         column_key = step_column_mapping.get(step)
         if not column_key:
-            print(f"❌ Unknown step: {step}")
+            self.log_error(f"❌ Unknown step: {step}")
             return False
         
         value = "TRUE" if complete else "FALSE"
@@ -476,7 +477,7 @@ class SheetsService:
     async def update_cancellation_status(self, submission_id: str, cancelled: bool = True, reason: str = "", is_last_minute: bool = False) -> bool:
         """Update cancellation status with reason and timing information"""
         if not self.spreadsheet:
-            print("⚠️  Google Sheets not available - cannot update cancellation status")
+            self.log_warning("⚠️  Google Sheets not available - cannot update cancellation status")
             return False
         
         try:
@@ -498,16 +499,16 @@ class SheetsService:
                     success = False
             
             if success:
-                print(f"✅ Updated cancellation status for submission {submission_id}")
+                self.log_info(f"✅ Updated cancellation status for submission {submission_id}")
                 if reason:
-                    print(f"   Reason: {reason}")
+                    self.log_info(f"   Reason: {reason}")
                 if is_last_minute:
-                    print(f"   ⚠️ Last minute cancellation noted")
+                    self.log_warning("   ⚠️ Last minute cancellation noted")
             
             return success
             
         except Exception as e:
-            print(f"❌ Error updating cancellation status: {e}")
+            self.log_error(f"❌ Error updating cancellation status: {e}")
             return False 
         
     def get_cell_value(self, row: List[str], key: str, default: str = "") -> str:
@@ -561,7 +562,7 @@ class SheetsService:
             ).execute()
             return result
         except Exception as e:
-            print(f"❌ Error appending row: {e}")
+            self.log_error(f"❌ Error appending row: {e}")
             return False
     
     
