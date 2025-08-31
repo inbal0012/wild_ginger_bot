@@ -90,7 +90,8 @@ class WildGingerBot(BaseService):
         self.log_info(f"User {user_id} started the bot")
         
         # search if user is already in the sheet
-        user_data = self.user_service.get_user_by_telegram_id(user_id)
+        user_data = await self.user_service.get_user_by_telegram_id(user_id)
+        
         if user_data:
             self.log_info(f"User {user_id} is already in the sheet")
             await update.message.reply_text(
@@ -192,7 +193,7 @@ class WildGingerBot(BaseService):
         user_id = str(teleg_user.id)
         self.log_info(f"User {user_id} checked status")
         
-        user = self.user_service.get_user_by_telegram_id(user_id)
+        user = await self.user_service.get_user_by_telegram_id(user_id)
         if user:
             registrations = await self.registration_service.get_all_registrations_for_user(user_id)
             if registrations:
@@ -239,7 +240,7 @@ class WildGingerBot(BaseService):
         self.log_info(f"User {user_id} checked help")
         
         await update.message.reply_text(
-            self.message_service.get_message(self.get_language_from_user(user_id), 'help')
+            self.message_service.get_message(await self.get_language_from_user(user_id), 'help')
         )
 
         # TODO
@@ -278,7 +279,7 @@ class WildGingerBot(BaseService):
         # TODO: search if user is already in the sheet
         # TODO: if user is already in the sheet, start the form flow skip language selection
         # TODO: if user is not in the sheet, create a new user and start the form flow
-        # user_data = self.user_service.get_user_by_telegram_id(user_id)
+        # user_data = await self.user_service.get_user_by_telegram_id(user_id)
                 
         # Start the form flow
         question = await self.form_flow_service.handle_register_start(str(user.id), language=user['language_code'])
@@ -313,7 +314,7 @@ class WildGingerBot(BaseService):
         next_question = await self.form_flow_service.handle_poll_answer(poll_info['question_field'], str(user_id), selected_options)
         if next_question:
             if isinstance(next_question, QuestionDefinition):
-                await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+                await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
                 # await update.message.reply_text(next_question['message'])
                 await self.app.bot.send_message(user_id, next_question['message'])
@@ -329,14 +330,14 @@ class WildGingerBot(BaseService):
         next_question = await self.form_flow_service.handle_text_answer(update, context)
         if next_question:
             if isinstance(next_question, QuestionDefinition):
-                await self.send_question_as_telegram_message(next_question, self.get_language_from_user(user_id), str(user_id))        
+                await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
                 await update.message.reply_text(next_question['message'])
         
         return
     
-    def get_language_from_user(self, user_id: str):
-        user_data = self.user_service.get_user_by_telegram_id(user_id)
+    async def get_language_from_user(self, user_id: str):
+        user_data = await self.user_service.get_user_by_telegram_id(user_id)
         if user_data:
             return user_data[self.user_service.headers['language']]
         else:

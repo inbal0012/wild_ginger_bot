@@ -10,7 +10,7 @@ class UserService:
         self.sheets_service = sheets_service
         self.headers = self.sheets_service.headers["Users"]
 
-    def get_user_by_telegram_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
+    async def get_user_by_telegram_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
         sheet_data = self.sheets_service.get_data_from_sheet("Users")
         
         if not sheet_data:
@@ -51,7 +51,7 @@ class UserService:
         return await self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", field, value)
     
     async def save_relevant_experience(self, user_id: str, event_type: str, answer: str):
-        user = self.get_user_by_telegram_id(user_id)
+        user = await self.get_user_by_telegram_id(user_id)
         if user:
             user_experience = user[self.headers["relevant_experience"]]
             if user_experience:
