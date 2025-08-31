@@ -94,10 +94,13 @@ class WildGingerBot(BaseService):
         
         if user_data:
             self.log_info(f"User {user_id} is already in the sheet")
+            language = user_data[self.user_service.headers['language']]
+            name = user_data[self.user_service.headers['full_name']]
             await update.message.reply_text(
                 # f"Hi {user['first_name']}! how are you?"
-                self.message_service.get_message(user_data[self.user_service.headers['language']], 'welcome', name=user_data[self.user_service.headers['full_name']])
+                self.message_service.get_message(language, 'welcome', name=name)
             )
+            await self.handle_register_start(user_id, language)
             # TODO
 
         else:
@@ -282,11 +285,15 @@ class WildGingerBot(BaseService):
         # user_data = await self.user_service.get_user_by_telegram_id(user_id)
                 
         # Start the form flow
-        question = await self.form_flow_service.handle_register_start(str(user.id), language=user['language_code'])
+        await self.handle_register_start(user.id, user['language_code'])
+        return
+    
+    async def handle_register_start(self, user_id: str, language: str):
+        question = await self.form_flow_service.handle_register_start(str(user_id), language=language)
         if question:
-            await self.send_question_as_telegram_message(question, user['language_code'], str(user.id))
+            await self.send_question_as_telegram_message(question, language, str(user_id))
         else:
-            self.log_error(f"Could not start form for user {user.id}")
+            self.log_error(f"Could not start form for user {user_id}")
         
         self.log_info(f"Form flow result: {question}")
         return
