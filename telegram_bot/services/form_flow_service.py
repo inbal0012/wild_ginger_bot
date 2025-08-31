@@ -1356,7 +1356,12 @@ class FormFlowService(BaseService):
     
     async def notify_admins(self, form_state: FormState):
         """Notify admins about form completion."""
-        message = f"Form completed by user {form_state.user_id}\n"
+        user = await self.user_service.get_user_by_telegram_id(form_state.user_id)
+        if not user:
+            self.log_error(f"No user name found for user {form_state.user_id}")
+            return
+        
+        message = f"Form completed by user @{user['telegram']}\n"   
         message += f"Event: {form_state.event_id}\n"
         message += f"Registration ID: {form_state.registration_id}\n"
         message += f"Answers: \n"
@@ -1764,7 +1769,7 @@ class FormFlowService(BaseService):
                 
                 elif condition.type == "user_exists":
                     # Check if user exists in sheets
-                    user_data = self.user_service.get_user_by_telegram_id(form_state.user_id)
+                    user_data = await self.user_service.get_user_by_telegram_id(form_state.user_id)
                     if user_data:
                         data = user_data[self.user_service.headers[condition.field]]
                         if data != "":
