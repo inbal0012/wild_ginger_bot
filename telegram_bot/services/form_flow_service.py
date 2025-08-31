@@ -29,6 +29,7 @@ from ..models.event import EventDTO
 from ..utils.validate_social_link import validate_social_link
 from ..utils.utils import str_to_Text
 
+
 class FormState:
     """Represents the state of a form for a specific user."""
     
