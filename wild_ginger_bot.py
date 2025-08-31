@@ -289,6 +289,12 @@ class WildGingerBot(BaseService):
         return
     
     async def handle_register_start(self, user_id: str, language: str):
+        user = await self.user_service.get_user_by_telegram_id(user_id)
+        if user:
+            language = user[self.user_service.headers["language"]]
+        else:
+            self.log_error(f"No user found for user {user_id}")
+
         question = await self.form_flow_service.handle_register_start(str(user_id), language=language)
         if question:
             await self.send_question_as_telegram_message(question, language, str(user_id))

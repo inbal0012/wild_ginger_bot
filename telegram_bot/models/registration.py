@@ -14,6 +14,7 @@ class RegistrationStatus(Enum):
     PAYMENT_CONFIRMED = "payment_confirmed"
     GROUP_OPENED = "group_opened"
     CANCELLED = "cancelled"
+    UNINTERESTED = "uninterested"
 
 class Status(Enum):
     # pending, approved, rejected, cancelled, uninterested
