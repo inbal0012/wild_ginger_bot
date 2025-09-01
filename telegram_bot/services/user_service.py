@@ -10,7 +10,7 @@ class UserService:
         self.sheets_service = sheets_service
         self.headers = self.sheets_service.headers["Users"]
 
-    async def get_user_by_telegram_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
+    def get_user_by_telegram_id(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
         sheet_data = self.sheets_service.get_data_from_sheet("Users")
         
         if not sheet_data:
@@ -38,7 +38,7 @@ class UserService:
         
         # Fill in the provided user data
         new_row[self.headers['telegram_user_id']] = user.telegram_user_id
-        new_row[self.headers['telegram']] = user.telegram_username
+        new_row[self.headers['telegram']] = user.telegram_username or ""
         new_row[self.headers['full_name']] = user.full_name
         new_row[self.headers['language']] = user.language
         
@@ -58,6 +58,10 @@ class UserService:
                 if isinstance(user_experience, str):
                     # if the experience is a string, convert it to a dictionary
                     user_experience = ast.literal_eval(user_experience)
+                else:
+                    user_experience = {}
+            else:
+                user_experience = {}
                 
             if event_type not in user_experience:
                 user_experience[event_type] = answer
