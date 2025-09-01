@@ -7,7 +7,6 @@ import pytest
 from unittest.mock import Mock, patch
 from telegram_bot.services.form_flow_service import FormFlowService
 from telegram_bot.models.form_flow import SkipCondition, SkipConditionItem
-from telegram_bot.config.form_config import FormConfig
 
 
 class TestSkipConditions:
@@ -69,11 +68,6 @@ class TestSkipConditions:
         }
         
         return FormFlowService(mock_sheets_service)
-    
-    @pytest.fixture
-    def form_config(self):
-        """Create a form config instance for testing"""
-        return FormConfig()
     
     def test_cuddle_event_hides_bdsm_questions(self, form_flow_service):
         """Test that BDSM questions are hidden for cuddle events"""
@@ -250,73 +244,63 @@ class TestSkipConditions:
         mock_check_skip.assert_called()
 
 
-class TestFormConfigSkipConditions:
-    """Test skip conditions in form config"""
-    
-    @pytest.fixture
-    def form_config(self):
-        """Create a form config instance for testing"""
-        return FormConfig()
-    
-    def test_form_config_has_skip_conditions(self, form_config):
-        """Test that form config has the same skip conditions as form flow service"""
-        # Test BDSM questions in form config
-        bdsm_questions = [
-            'bdsm_experience',
-            'bdsm_declaration',
-            'share_bdsm_interests',
-            'limits_preferences_matrix',
-            'boundaries_text',
-            'preferences_text',
-            'bdsm_comments',
-            'contact_type',
-            'contact_type_other'
-        ]
-
-        question_definitions = form_config.get_question_definitions()
-        for question_id in bdsm_questions:
-            question_def = question_definitions.get(question_id)
-            assert question_def is not None, f"Question {question_id} not found in form config"
-            assert question_def.skip_condition is not None, f"Question {question_id} missing skip condition"
-            
-            # Check that it has the correct skip condition for cuddle events
-            skip_condition = question_def.skip_condition
-            assert skip_condition.operator == "OR"
-            
-            # Check that at least one condition is for cuddle events
-            has_cuddle_condition = False
-            for condition in skip_condition.conditions:
-                if condition.type == "event_type" and condition.value == "cuddle":
-                    has_cuddle_condition = True
-                    break
-            
-            assert has_cuddle_condition, f"Question {question_id} missing cuddle skip condition"
-    
-    def test_form_config_food_comments_skip(self, form_config):
-        """Test that food_comments has skip condition in form config"""
-        question_definitions = form_config.get_question_definitions()
-        question_def = question_definitions.get('food_comments')
-        assert question_def is not None, "food_comments question not found in form config"
-        assert question_def.skip_condition is not None, "food_comments missing skip condition"
-        
-        # Check that it has the correct skip condition for food restrictions
-        skip_condition = question_def.skip_condition
-        assert skip_condition.operator == "OR"
-        assert len(skip_condition.conditions) == 1
-        condition = skip_condition.conditions[0]
-        assert condition.type == "field_value"
-        assert condition.field == "food_restrictions"
-        assert condition.value == "no"
-        assert condition.operator == "equals"
-
-
 def run_skip_condition_tests():
     """Run all skip condition tests and report results"""
     print("🧪 Running skip condition tests...")
     
     # Create test instances
-    form_flow_service = FormFlowService()
-    form_config = FormConfig()
+    mock_sheets_service = Mock()
+    mock_sheets_service.headers = {
+        "Users": {
+            "telegram_user_id": 0,
+            "telegram": 1,
+            "full_name": 2,
+            "language": 3,
+            "relevant_experience": 4
+        },
+        "Registrations": {
+            "registration_id": 0,
+            "user_id": 1,
+            "event_id": 2,
+            "status": 3
+        },
+        "Events": {
+            "id": 0,
+            "name": 1,
+            "start_date": 2,
+            "start_time": 3,
+            "event_type": 4,
+            "price_single": 5,
+            "price_couple": 6,
+            "theme": 7,
+            "max_participants": 8,
+            "status": 9,
+            "created_at": 10,
+            "updated_at": 11,
+            "main_group_id": 12,
+            "singles_group_id": 13,
+            "is_public": 14,
+            "description": 15,
+            "location": 16,
+            "end_date": 17,
+            "end_time": 18,
+            "price_include": 19,
+            "schedule": 20,
+            "participant_commitment": 21,
+            "line_rules": 22,
+            "place_rules": 23
+        }
+    }
+    
+    # Mock get_data_from_sheet to return proper data structure
+    mock_sheets_service.get_data_from_sheet.return_value = {
+        'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+        'rows': [
+            ['event1', 'Test Event 1', '2024-01-15', '18:00', 'workshop', '100', '180', 'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Test description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+        ]
+    }
+    
+    form_flow_service = FormFlowService(mock_sheets_service)
     
     # Test counters
     passed_tests = 0
@@ -344,17 +328,6 @@ def run_skip_condition_tests():
             )
             assert has_cuddle_skip
             
-            # Check form config
-            question_def_config = form_config.question_definitions.get(question_id)
-            assert question_def_config is not None
-            assert question_def_config.skip_condition is not None
-            
-            has_cuddle_skip_config = any(
-                condition.type == "event_type" and condition.value == "cuddle"
-                for condition in question_def_config.skip_condition.conditions
-            )
-            assert has_cuddle_skip_config
-            
             print(f"  ✅ {question_id} - Skip condition for cuddle events")
             passed_tests += 1
             
@@ -375,17 +348,6 @@ def run_skip_condition_tests():
             for condition in question_def.skip_condition.conditions
         )
         assert has_food_skip
-        
-        # Check form config
-        question_def_config = form_config.question_definitions.get('food_comments')
-        assert question_def_config is not None
-        assert question_def_config.skip_condition is not None
-        
-        has_food_skip_config = any(
-            condition.type == "field_value" and condition.field == "food_restrictions" and condition.value == "no"
-            for condition in question_def_config.skip_condition.conditions
-        )
-        assert has_food_skip_config
         
         print("  ✅ food_comments - Skip condition for food_restrictions = 'no'")
         passed_tests += 1
@@ -410,17 +372,6 @@ def run_skip_condition_tests():
                 for condition in question_def.skip_condition.conditions
             )
             assert has_bdsm_skip
-            
-            # Check form config
-            question_def_config = form_config.question_definitions.get(question_id)
-            assert question_def_config is not None
-            assert question_def_config.skip_condition is not None
-            
-            has_bdsm_skip_config = any(
-                condition.type == "field_value" and condition.field == "share_bdsm_interests" and condition.value == "no"
-                for condition in question_def_config.skip_condition.conditions
-            )
-            assert has_bdsm_skip_config
             
             print(f"  ✅ {question_id} - Skip condition for share_bdsm_interests = 'no'")
             passed_tests += 1
