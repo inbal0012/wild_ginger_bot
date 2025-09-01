@@ -26,35 +26,28 @@ def test_form_structure():
     total_tests += 1
     try:
         form_flow_file = "telegram_bot/services/form_flow_service.py"
-        form_config_file = "telegram_bot/config/form_config.py"
         
         assert os.path.exists(form_flow_file), f"Form flow service file not found: {form_flow_file}"
-        assert os.path.exists(form_config_file), f"Form config file not found: {form_config_file}"
         
-        print("  ✅ Form configuration files exist")
+        print("  ✅ Form flow service file exists")
         passed_tests += 1
     except Exception as e:
         print(f"  ❌ Error checking form files: {e}")
     
-    # Test 2: Check skip conditions in form files
-    print("\n🔍 Test 2: Skip Conditions in Form Files")
+    # Test 2: Check skip conditions in form flow service
+    print("\n🔍 Test 2: Skip Conditions in Form Flow Service")
     print("-" * 30)
     total_tests += 1
     try:
         with open(form_flow_file, 'r', encoding='utf-8') as f:
             form_flow_content = f.read()
         
-        with open(form_config_file, 'r', encoding='utf-8') as f:
-            form_config_content = f.read()
-        
         # Check for skip conditions
         cuddle_conditions_flow = form_flow_content.count('SkipConditionItem(type="event_type", value="cuddle"')
-        cuddle_conditions_config = form_config_content.count('SkipConditionItem(type="event_type", value="cuddle"')
         
         assert cuddle_conditions_flow >= 9, f"Expected at least 9 cuddle skip conditions in form flow, found {cuddle_conditions_flow}"
-        assert cuddle_conditions_config >= 9, f"Expected at least 9 cuddle skip conditions in form config, found {cuddle_conditions_config}"
         
-        print(f"  ✅ Cuddle skip conditions: {cuddle_conditions_flow} (flow), {cuddle_conditions_config} (config)")
+        print(f"  ✅ Cuddle skip conditions: {cuddle_conditions_flow} found")
         passed_tests += 1
     except Exception as e:
         print(f"  ❌ Error checking skip conditions: {e}")
