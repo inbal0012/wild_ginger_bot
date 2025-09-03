@@ -90,7 +90,7 @@ class WildGingerBot(BaseService):
         self.log_info(f"User {user_id} started the bot")
         
         # search if user is already in the sheet
-        user_data = await self.user_service.get_user_by_telegram_id(user_id)
+        user_data = self.user_service.get_user_by_telegram_id(user_id)
         
         if user_data:
             self.log_info(f"User {user_id} is already in the sheet")
@@ -196,7 +196,7 @@ class WildGingerBot(BaseService):
         user_id = str(teleg_user.id)
         self.log_info(f"User {user_id} checked status")
         
-        user = await self.user_service.get_user_by_telegram_id(user_id)
+        user = self.user_service.get_user_by_telegram_id(user_id)
         if user:
             registrations = await self.registration_service.get_all_registrations_for_user(user_id)
             if registrations:
@@ -282,14 +282,14 @@ class WildGingerBot(BaseService):
         # TODO: search if user is already in the sheet
         # TODO: if user is already in the sheet, start the form flow skip language selection
         # TODO: if user is not in the sheet, create a new user and start the form flow
-        # user_data = await self.user_service.get_user_by_telegram_id(user_id)
+        # user_data = self.user_service.get_user_by_telegram_id(user_id)
                 
         # Start the form flow
         await self.handle_register_start(user.id, user['language_code'])
         return
     
     async def handle_register_start(self, user_id: str, language: str):
-        user = await self.user_service.get_user_by_telegram_id(user_id)
+        user = self.user_service.get_user_by_telegram_id(user_id)
         if user:
             language = user[self.user_service.headers["language"]]
         else:
@@ -350,7 +350,7 @@ class WildGingerBot(BaseService):
         return
     
     async def get_language_from_user(self, user_id: str):
-        user_data = await self.user_service.get_user_by_telegram_id(user_id)
+        user_data = self.user_service.get_user_by_telegram_id(user_id)
         if user_data:
             return user_data[self.user_service.headers['language']]
         else:

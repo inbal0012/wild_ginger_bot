@@ -534,25 +534,37 @@ class TestUserScenarios:
             'headers': ['telegram_user_id', 'telegram', 'full_name', 'language', 'relevant_experience', 'is_returning_participant'],
             'rows': []
         }
-        user_service.sheets_service.get_data_from_sheet.return_value = user_data
-        user_service.sheets_service.append_row = AsyncMock(return_value=True)
-        user_service.update_user_field = AsyncMock(return_value=True)
         
         # Mock event data
         event_data = {
-            'headers': ['id', 'name', 'event_type', 'status'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
             'rows': [
-                ['event1', 'BDSM Workshop', 'bdsm_workshop', 'active']
+                ['event1', 'BDSM Workshop', '2024-01-15', '18:00', 'bdsm_workshop', '100', '180', 'BDSM Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'BDSM workshop description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
             ]
         }
-        event_service.sheets_service.get_data_from_sheet.return_value = event_data
         
         # Mock registration data
         reg_data = {
             'headers': ['registration_id', 'user_id', 'event_id', 'status'],
             'rows': []
         }
-        registration_service.sheets_service.get_data_from_sheet.return_value = reg_data
+        
+        # Set up side effect to return different data based on sheet name
+        def get_data_side_effect(sheet_name):
+            if sheet_name == "Users":
+                return user_data
+            elif sheet_name == "Events":
+                return event_data
+            elif sheet_name == "Registrations":
+                return reg_data
+            else:
+                return None
+        
+        user_service.sheets_service.get_data_from_sheet.side_effect = get_data_side_effect
+        user_service.sheets_service.append_row = AsyncMock(return_value=True)
+        user_service.update_user_field = AsyncMock(return_value=True)
+        event_service.sheets_service.get_data_from_sheet.side_effect = get_data_side_effect
+        registration_service.sheets_service.get_data_from_sheet.side_effect = get_data_side_effect
         registration_service.sheets_service.append_row = AsyncMock(return_value=True)
         
         # Create new user

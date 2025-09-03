@@ -147,7 +147,7 @@ class TestUserService:
     async def test_create_new_user_failure_append_fails(self, user_service):
         """Test user creation failure when append_row fails"""
         sheet_data = {
-            'headers': ['telegram_user_id', 'telegram', 'full_name', 'language'],
+            'headers': ['telegram_user_id', 'telegram', 'full_name', 'language', 'relevant_experience'],
             'rows': []
         }
         user_service.sheets_service.get_data_from_sheet.return_value = sheet_data
@@ -258,7 +258,7 @@ class TestUserService:
     async def test_create_new_user_with_none_username(self, user_service):
         """Test creating user with None username"""
         sheet_data = {
-            'headers': ['telegram_user_id', 'telegram', 'full_name', 'language'],
+            'headers': ['telegram_user_id', 'telegram', 'full_name', 'language', 'relevant_experience'],
             'rows': []
         }
         user_service.sheets_service.get_data_from_sheet.return_value = sheet_data

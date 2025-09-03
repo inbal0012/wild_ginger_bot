@@ -1364,7 +1364,7 @@ class FormFlowService(BaseService):
     
     async def notify_admins(self, form_state: FormState):
         """Notify admins about form completion."""
-        user = await self.user_service.get_user_by_telegram_id(form_state.user_id)
+        user = self.user_service.get_user_by_telegram_id(form_state.user_id)
         if not user:
             self.log_error(f"No user name found for user {form_state.user_id}")
             return
@@ -1734,9 +1734,9 @@ class FormFlowService(BaseService):
 {event_details.name}
 יום {event_details.start_date}, {event_details.start_time}-{event_details.end_time}, ב {event_details.location}
 
-{event_details.schedule}
-
 {event_details.description}
+
+{event_details.schedule}
 
 
 מחיר:
@@ -1746,8 +1746,6 @@ class FormFlowService(BaseService):
 
 מחיר השתתפות כולל:
 {event_details.price_include}
-
-אלכוהול בתוספת תשלום.
 
 ניתן להוזיל את המחיר ע"י הצטרפות לצוות כהלפר ו/או דיאמ (פרטים בעמוד האחרון)
 
@@ -1777,7 +1775,7 @@ class FormFlowService(BaseService):
                 
                 elif condition.type == "user_exists":
                     # Check if user exists in sheets
-                    user_data = await self.user_service.get_user_by_telegram_id(form_state.user_id)
+                    user_data = self.user_service.get_user_by_telegram_id(form_state.user_id)
                     if user_data:
                         data = user_data[self.user_service.headers[condition.field]]
                         if data != "":
