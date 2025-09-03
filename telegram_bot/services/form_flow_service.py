@@ -1016,7 +1016,15 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר אופציה", en="Please select an option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="field_value", field="wants_to_DM", operator="equals", value="no"),
+                        SkipConditionItem(type="field_value", field="is_surtified_DM", operator="equals", value="no")
+                    ]
+                )
+                
             ),
         }
     
