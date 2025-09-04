@@ -228,6 +228,7 @@ class TestEventModels:
             participant_commitment="Required",
             line_rules="Test rules",
             place_rules="Test place rules",
+            balance="0",
             is_public=True,
             main_group_id="group1",
             singles_group_id="singles1",

@@ -284,7 +284,7 @@ class TestWildGingerBot:
         bot.send_question_as_telegram_message = AsyncMock()
         # Mock get_language_from_user as async function
         bot.get_language_from_user = AsyncMock(return_value="en")
-        bot.save_poll_data = Mock()
+        bot.poll_data_service.save_single_poll = Mock()
         
         await bot.handle_poll_answer(update, Mock())
         
@@ -497,14 +497,14 @@ class TestWildGingerBot:
         assert 123456789 in bot.poll_data["poll123"]["votes"][1]
     
     def test_save_poll_data(self, bot):
-        """Test saving poll data"""
-        test_data = {"test": "data"}
-        bot.file_storage.save_data.return_value = True
+        """Test saving poll data using PollDataService"""
+        test_data = {"poll1": {"question": "Test?", "options": ["Yes", "No"]}}
+        bot.poll_data_service.save_single_poll = Mock(return_value=True)
         
         result = bot.save_poll_data(test_data)
         
         assert result is True
-        bot.file_storage.save_data.assert_called_once_with("poll_data", test_data)
+        bot.poll_data_service.save_single_poll.assert_called_once_with("poll1", {"question": "Test?", "options": ["Yes", "No"]})
     
     def test_load_poll_data(self, bot):
         """Test loading poll data"""

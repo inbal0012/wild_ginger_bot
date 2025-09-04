@@ -43,7 +43,8 @@ class TestEventService:
                 "schedule": 20,
                 "participant_commitment": 21,
                 "line_rules": 22,
-                "place_rules": 23
+                "place_rules": 23,
+                "balance": 24
             }
         }
         return sheets_service
@@ -57,11 +58,11 @@ class TestEventService:
     def sample_event_data(self):
         """Sample event data for testing"""
         return {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['event1', 'Test Event 1', '2024-01-15', '18:00', 'workshop', '100', '180', 'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Test description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules'],
-                ['event2', 'Test Event 2', '2024-02-15', '19:00', 'party', '150', '250', 'Fetish Party', '50', 'inactive', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group2', 'singles2', 'false', 'Test description 2', 'Test location 2', '2024-02-15', '23:00', 'Drinks included', '19:00-23:00', 'Commitment required', 'Line rules 2', 'Place rules 2'],
-                ['event3', 'Test Event 3', '2024-03-15', '20:00', 'workshop', '120', '200', 'Advanced BDSM', '15', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group3', 'singles3', 'true', 'Test description 3', 'Test location 3', '2024-03-15', '24:00', 'Full meal', '20:00-24:00', 'Commitment required', 'Line rules 3', 'Place rules 3']
+                ['event1', 'Test Event 1', '2024-01-15', '18:00', 'play', '100', '180', 'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Test description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0'],
+                ['event2', 'Test Event 2', '2024-02-15', '19:00', 'cuddle', '150', '250', 'Fetish Party', '50', 'inactive', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group2', 'singles2', 'false', 'Test description 2', 'Test location 2', '2024-02-15', '23:00', 'Drinks included', '19:00-23:00', 'Commitment required', 'Line rules 2', 'Place rules 2', '0'],
+                ['event3', 'Test Event 3', '2024-03-15', '20:00', 'sexual', '120', '200', 'Advanced BDSM', '15', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group3', 'singles3', 'true', 'Test description 3', 'Test location 3', '2024-03-15', '24:00', 'Full meal', '20:00-24:00', 'Commitment required', 'Line rules 3', 'Place rules 3', '0']
             ]
         }
     
@@ -111,10 +112,10 @@ class TestEventService:
     def test_get_upcoming_events_no_active_events(self, event_service):
         """Test getting upcoming events when no active events exist"""
         event_service.sheets_service.get_data_from_sheet.return_value = {
-            'headers': ['id', 'name', 'description', 'start_date', 'start_time', 'end_date', 'end_time', 'location', 'schedule', 'event_type', 'price_single', 'price_couple', 'price_include', 'theme', 'max_participants', 'status', 'participant_commitment', 'line_rules', 'place_rules', 'created_at'],
+            'headers': ['id', 'name', 'description', 'start_date', 'start_time', 'end_date', 'end_time', 'location', 'schedule', 'event_type', 'price_single', 'price_couple', 'price_include', 'theme', 'max_participants', 'status', 'participant_commitment', 'line_rules', 'place_rules', 'created_at', 'balance'],
             'rows': [
-                ['event1', 'Test Event 1', 'Description 1', '2024-01-01', '18:00', '2024-01-01', '22:00', 'Location 1', '18:00-22:00', 'workshop', '100', '180', 'Food included', 'Theme 1', '20', 'inactive', 'Required', 'Rules 1', 'Place rules 1', '2024-01-01'],
-                ['event2', 'Test Event 2', 'Description 2', '2024-01-02', '19:00', '2024-01-02', '23:00', 'Location 2', '19:00-23:00', 'workshop', '120', '200', 'Food included', 'Theme 2', '25', 'cancelled', 'Required', 'Rules 2', 'Place rules 2', '2024-01-02']
+                ['event1', 'Test Event 1', 'Description 1', '2024-01-01', '18:00', '2024-01-01', '22:00', 'Location 1', '18:00-22:00', 'sexual', '100', '180', 'Food included', 'Theme 1', '20', 'inactive', 'Required', 'Rules 1', 'Place rules 1', '2024-01-01', '0'],
+                ['event2', 'Test Event 2', 'Description 2', '2024-01-02', '19:00', '2024-01-02', '23:00', 'Location 2', '19:00-23:00', 'cuddle', '120', '200', 'Food included', 'Theme 2', '25', 'cancelled', 'Required', 'Rules 2', 'Place rules 2', '2024-01-02', '0']
             ]
         }
         
@@ -125,11 +126,11 @@ class TestEventService:
     def test_row_to_eventDTO(self, event_service):
         """Test converting row to EventDTO"""
         row = [
-            'event1', 'Test Event', '2024-01-15', '18:00', 'workshop', '100', '180', 
-            'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 
-            'group1', 'singles1', 'true', 'Test description', 'Test location', 
-            '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 
-            'Line rules', 'Place rules'
+            'event1', 'Test Event', '2024-01-15', '18:00', 'cuddle', '100', '180',
+            'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00',
+            'group1', 'singles1', 'true', 'Test description', 'Test location',
+            '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required',
+            'Line rules', 'Place rules', '0'
         ]
         
         event_dto = event_service.row_to_eventDTO(row)
@@ -203,7 +204,7 @@ class TestEventService:
     async def test_create_new_event_success(self, event_service):
         """Test successful event creation"""
         sheet_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': []
         }
         event_service.sheets_service.get_data_from_sheet.return_value = sheet_data
@@ -251,7 +252,7 @@ class TestEventService:
     async def test_create_new_event_failure_append_fails(self, event_service):
         """Test event creation failure when append_row fails"""
         sheet_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': []
         }
         event_service.sheets_service.get_data_from_sheet.return_value = sheet_data
@@ -314,7 +315,7 @@ class TestEventService:
     
     def test_row_to_eventDTO_with_empty_values(self, event_service):
         """Test converting row with empty values to EventDTO"""
-        row = [''] * 24  # Empty row with 24 columns
+        row = [''] * 25  # Empty row with 25 columns
         row[0] = 'event1'  # Set only the ID
         
         event_dto = event_service.row_to_eventDTO(row)
@@ -347,13 +348,13 @@ class TestEventService:
     def test_get_upcoming_events_mixed_statuses(self, event_service):
         """Test getting upcoming events with mixed statuses"""
         event_service.sheets_service.get_data_from_sheet.return_value = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['event1', 'Active Event 1', '2024-01-01', '18:00', 'workshop', '100', '180', 'Theme 1', '20', 'active', '2024-01-01', '2024-01-01', 'group1', 'singles1', 'true', 'Description 1', 'Location 1', '2024-01-01', '22:00', 'Food included', '18:00-22:00', 'Required', 'Rules 1', 'Place rules 1'],
-                ['event2', 'Inactive Event', '2024-01-02', '19:00', 'workshop', '120', '200', 'Theme 2', '25', 'inactive', '2024-01-02', '2024-01-02', 'group2', 'singles2', 'false', 'Description 2', 'Location 2', '2024-01-02', '23:00', 'Food included', '19:00-23:00', 'Required', 'Rules 2', 'Place rules 2'],
-                ['event3', 'Active Event 2', '2024-01-03', '20:00', 'workshop', '150', '250', 'Theme 3', '30', 'active', '2024-01-03', '2024-01-03', 'group3', 'singles3', 'true', 'Description 3', 'Location 3', '2024-01-03', '00:00', 'Food included', '20:00-00:00', 'Required', 'Rules 3', 'Place rules 3'],
-                ['event4', 'Cancelled Event', '2024-01-04', '21:00', 'workshop', '180', '300', 'Theme 4', '35', 'cancelled', '2024-01-04', '2024-01-04', 'group4', 'singles4', 'false', 'Description 4', 'Location 4', '2024-01-04', '01:00', 'Food included', '21:00-01:00', 'Required', 'Rules 4', 'Place rules 4'],
-                ['event5', 'Active Event 3', '2024-01-05', '22:00', 'workshop', '200', '350', 'Theme 5', '40', 'active', '2024-01-05', '2024-01-05', 'group5', 'singles5', 'true', 'Description 5', 'Location 5', '2024-01-05', '02:00', 'Food included', '22:00-02:00', 'Required', 'Rules 5', 'Place rules 5']
+                ['event1', 'Active Event 1', '2024-01-01', '18:00', 'workshop', '100', '180', 'Theme 1', '20', 'active', '2024-01-01', '2024-01-01', 'group1', 'singles1', 'true', 'Description 1', 'Location 1', '2024-01-01', '22:00', 'Food included', '18:00-22:00', 'Required', 'Rules 1', 'Place rules 1', '0'],
+                ['event2', 'Inactive Event', '2024-01-02', '19:00', 'workshop', '120', '200', 'Theme 2', '25', 'inactive', '2024-01-02', '2024-01-02', 'group2', 'singles2', 'false', 'Description 2', 'Location 2', '2024-01-02', '23:00', 'Food included', '19:00-23:00', 'Required', 'Rules 2', 'Place rules 2', '0'],
+                ['event3', 'Active Event 2', '2024-01-03', '20:00', 'workshop', '150', '250', 'Theme 3', '30', 'active', '2024-01-03', '2024-01-03', 'group3', 'singles3', 'true', 'Description 3', 'Location 3', '2024-01-03', '00:00', 'Food included', '20:00-00:00', 'Required', 'Rules 3', 'Place rules 3', '0'],
+                ['event4', 'Cancelled Event', '2024-01-04', '21:00', 'workshop', '180', '300', 'Theme 4', '35', 'cancelled', '2024-01-04', '2024-01-04', 'group4', 'singles4', 'false', 'Description 4', 'Location 4', '2024-01-04', '01:00', 'Food included', '21:00-01:00', 'Required', 'Rules 4', 'Place rules 4', '0'],
+                ['event5', 'Active Event 3', '2024-01-05', '22:00', 'workshop', '200', '350', 'Theme 5', '40', 'active', '2024-01-05', '2024-01-05', 'group5', 'singles5', 'true', 'Description 5', 'Location 5', '2024-01-05', '02:00', 'Food included', '22:00-02:00', 'Required', 'Rules 5', 'Place rules 5', '0']
             ]
         }
         

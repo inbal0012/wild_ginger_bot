@@ -180,6 +180,8 @@ class TestUserService:
     @pytest.mark.asyncio
     async def test_save_relevant_experience_new_user(self, user_service):
         """Test saving relevant experience for new user"""
+        # Mock the headers to include relevant_experience at index 4
+        user_service.headers = {'telegram_user_id': 0, 'telegram': 1, 'full_name': 2, 'language': 3, 'relevant_experience': 4}
         user_data = ['123456789', '@testuser', 'Test User', 'en', '{}']
         with patch.object(user_service, 'get_user_by_telegram_id', return_value=user_data):
             user_service.update_user_field = AsyncMock(return_value=True)
@@ -194,6 +196,8 @@ class TestUserService:
     @pytest.mark.asyncio
     async def test_save_relevant_experience_existing_user(self, user_service):
         """Test saving relevant experience for user with existing experience"""
+        # Mock the headers to include relevant_experience at index 4
+        user_service.headers = {'telegram_user_id': 0, 'telegram': 1, 'full_name': 2, 'language': 3, 'relevant_experience': 4}
         user_data = ['123456789', '@testuser', 'Test User', 'en', '{"event1": "beginner"}']
         with patch.object(user_service, 'get_user_by_telegram_id', return_value=user_data):
             user_service.update_user_field = AsyncMock(return_value=True)
@@ -219,6 +223,8 @@ class TestUserService:
     @pytest.mark.asyncio
     async def test_save_relevant_experience_with_string_experience(self, user_service):
         """Test saving relevant experience when experience is stored as string"""
+        # Mock the headers to include relevant_experience at index 4
+        user_service.headers = {'telegram_user_id': 0, 'telegram': 1, 'full_name': 2, 'language': 3, 'relevant_experience': 4}
         user_data = ['123456789', '@testuser', 'Test User', 'en', '{"event1": "beginner"}']
         with patch.object(user_service, 'get_user_by_telegram_id', return_value=user_data):
             user_service.update_user_field = AsyncMock(return_value=True)
@@ -233,6 +239,8 @@ class TestUserService:
     @pytest.mark.asyncio
     async def test_save_relevant_experience_empty_experience(self, user_service):
         """Test saving relevant experience when experience field is empty"""
+        # Mock the headers to include relevant_experience at index 4
+        user_service.headers = {'telegram_user_id': 0, 'telegram': 1, 'full_name': 2, 'language': 3, 'relevant_experience': 4}
         user_data = ['123456789', '@testuser', 'Test User', 'en', '']
         with patch.object(user_service, 'get_user_by_telegram_id', return_value=user_data):
             user_service.update_user_field = AsyncMock(return_value=True)

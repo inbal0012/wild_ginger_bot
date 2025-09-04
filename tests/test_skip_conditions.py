@@ -55,15 +55,16 @@ class TestSkipConditions:
                 "schedule": 20,
                 "participant_commitment": 21,
                 "line_rules": 22,
-                "place_rules": 23
+                "place_rules": 23,
+                "balance": 24
             }
         }
         
         # Mock get_data_from_sheet to return proper data structure
         mock_sheets_service.get_data_from_sheet.return_value = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['event1', 'Test Event 1', '2024-01-15', '18:00', 'workshop', '100', '180', 'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Test description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+                ['event1', 'Test Event 1', '2024-01-15', '18:00', 'workshop', '100', '180', 'BDSM Basics', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Test description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0']
             ]
         }
         

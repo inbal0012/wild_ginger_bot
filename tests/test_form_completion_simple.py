@@ -65,7 +65,7 @@ class TestFormCompletionSimple:
             
             assert "he" in message
             assert "en" in message
-            assert "תודה על העניין שלך" in message["he"] or "Thank you for your interest" in message["en"]
+            assert "תודה על ההרשמה" in message["he"] or "Thank you for registering" in message["en"]
     
     def test_create_error_response(self, sample_form_state):
         """Test creating error response."""

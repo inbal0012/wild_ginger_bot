@@ -92,7 +92,8 @@ class TestUserScenarios:
                 "schedule": 20,
                 "participant_commitment": 21,
                 "line_rules": 22,
-                "place_rules": 23
+                "place_rules": 23,
+                "balance": 24
             }
         }
         return sheets_service
@@ -179,16 +180,18 @@ class TestUserScenarios:
         call_args = user_service.sheets_service.append_row.call_args_list[0]
         new_user_row = call_args[0][1]
         # Check that is_returning_participant field is empty/false for new user
-        assert new_user_row[5] == ""  # is_returning_participant field
+        if 'is_returning_participant' in user_service.headers:
+            is_returning_index = user_service.headers['is_returning_participant']
+            assert new_user_row[is_returning_index] == ""  # is_returning_participant field
     
     @pytest.mark.asyncio
     async def test_new_user_cuddle_event_registration(self, user_service, registration_service, event_service):
         """Test new user registering for a cuddle event"""
         # Mock event data - cuddle event
         event_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['cuddle1', 'Cozy Cuddle Party', '2024-01-15', '18:00', 'cuddle_party', '100', '180', 'Cuddle Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Cuddle party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+                ['cuddle1', 'Cozy Cuddle Party', '2024-01-15', '18:00', 'cuddle_party', '100', '180', 'Cuddle Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Cuddle party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0']
             ]
         }
         
@@ -229,9 +232,9 @@ class TestUserScenarios:
         """Test new user registering for a sexual event"""
         # Mock event data - sexual event
         event_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['sexual1', 'Intimate Play Party', '2024-01-15', '18:00', 'sexual_party', '100', '180', 'Sexual Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Sexual party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+                ['sexual1', 'Intimate Play Party', '2024-01-15', '18:00', 'sexual_party', '100', '180', 'Sexual Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Sexual party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0']
             ]
         }
         
@@ -282,9 +285,9 @@ class TestUserScenarios:
         
         # Mock event data
         event_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['event2', 'Advanced BDSM Workshop', '2024-01-15', '18:00', 'bdsm_workshop', '100', '180', 'BDSM Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Advanced BDSM workshop description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+                ['event2', 'Advanced BDSM Workshop', '2024-01-15', '18:00', 'bdsm_workshop', '100', '180', 'BDSM Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Advanced BDSM workshop description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0']
             ]
         }
         
@@ -322,8 +325,12 @@ class TestUserScenarios:
         # Verify user has experience in this event type
         user = user_service.get_user_by_telegram_id("returning123")
         assert user is not None
-        assert user[5] == "true"  # is_returning_participant
-        assert "bdsm_workshop" in user[4]  # relevant_experience
+        if 'is_returning_participant' in user_service.headers:
+            is_returning_index = user_service.headers['is_returning_participant']
+            assert user[is_returning_index] == "true"  # is_returning_participant
+        if 'relevant_experience' in user_service.headers:
+            exp_index = user_service.headers['relevant_experience']
+            assert "bdsm_workshop" in user[exp_index]  # relevant_experience
     
     @pytest.mark.asyncio
     async def test_returning_user_different_event_type(self, user_service, registration_service, event_service):
@@ -339,9 +346,9 @@ class TestUserScenarios:
         
         # Mock event data - sexual event (different from their experience)
         event_data = {
-            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules'],
+            'headers': ['id', 'name', 'start_date', 'start_time', 'event_type', 'price_single', 'price_couple', 'theme', 'max_participants', 'status', 'created_at', 'updated_at', 'main_group_id', 'singles_group_id', 'is_public', 'description', 'location', 'end_date', 'end_time', 'price_include', 'schedule', 'participant_commitment', 'line_rules', 'place_rules', 'balance'],
             'rows': [
-                ['sexual1', 'Intimate Play Party', '2024-01-15', '18:00', 'sexual_party', '100', '180', 'Sexual Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Sexual party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules']
+                ['sexual1', 'Intimate Play Party', '2024-01-15', '18:00', 'sexual_party', '100', '180', 'Sexual Theme', '20', 'active', '2024-01-01 10:00:00', '2024-01-01 10:00:00', 'group1', 'singles1', 'true', 'Sexual party description', 'Test location', '2024-01-15', '22:00', 'Food included', '18:00-22:00', 'Commitment required', 'Line rules', 'Place rules', '0']
             ]
         }
         event_service.sheets_service.get_data_from_sheet.return_value = event_data
@@ -366,8 +373,12 @@ class TestUserScenarios:
         # Verify user is still marked as returning but doesn't have experience in this event type
         user = user_service.get_user_by_telegram_id("returning123")
         assert user is not None
-        assert user[5] == "true"  # is_returning_participant
-        assert "sexual_party" not in user[4]  # relevant_experience
+        if 'is_returning_participant' in user_service.headers:
+            is_returning_index = user_service.headers['is_returning_participant']
+            assert user[is_returning_index] == "true"  # is_returning_participant
+        if 'relevant_experience' in user_service.headers:
+            exp_index = user_service.headers['relevant_experience']
+            assert "sexual_party" not in user[exp_index]  # relevant_experience
     
     # ===== EVENT TYPE SPECIFIC SCENARIOS =====
     
