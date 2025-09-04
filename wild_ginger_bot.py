@@ -1,5 +1,5 @@
-from telegram import Update, BotCommand, User
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, MessageHandler, filters
+from telegram import Update, BotCommand, User, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, MessageHandler, filters, CallbackQueryHandler
 from telegram.constants import ParseMode
 import os
 from dotenv import load_dotenv
@@ -371,25 +371,6 @@ class WildGingerBot(BaseService):
         elif query.data == "btn2":
             await query.edit_message_text(text="Btn2 is pressed.")
 
-    async def update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        sheet_data = self.sheets_service.get_data_from_sheet("Registrations")
-        if not sheet_data:
-            return False
-        
-        headers = sheet_data['headers']
-        rows = sheet_data['rows']
-        
-        user_id_col = headers.index('user_id')
-        # get all uniqe users from the user_id_col
-        unique_users = set(row[user_id_col] for row in rows if row[user_id_col])
-        unique_users = ["332883645", "846858195", "7333736051"]
-        for user_id in unique_users:
-            try:
-                await self.app.bot.send_message(user_id, "update")
-            except Exception as e:
-                self.log_error(f"Error sending message to user {user_id}: {e}")
-
-    
     async def get_language_from_user(self, user_id: str):
         user_data = self.user_service.get_user_by_telegram_id(user_id)
         if user_data:
