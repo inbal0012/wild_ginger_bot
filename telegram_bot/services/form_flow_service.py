@@ -14,102 +14,21 @@ from .sheets_service import SheetsService
 from .user_service import UserService
 from .event_service import EventService
 from .registration_service import RegistrationService
-from .file_storage_service import FileStorageService
+from .active_forms_service import ActiveFormsService
 from telegram import Update, Bot
 from telegram.ext import ContextTypes, Application
 from telegram.constants import ParseMode
 from ..models.form_flow import (
-    QuestionType, ValidationRuleType, FormState, ValidationRule,
+    QuestionType, ValidationRuleType, ValidationRule,
     SkipConditionItem, SkipCondition, Text, QuestionOption, QuestionDefinition,
     ValidationResult, FormContext, FormStateData, FormProgress, FormData,
     UpdateableFieldDTO, UpdateResult
 )
+from ..models.form_state import FormState
 from ..models.registration import CreateRegistrationDTO, RegistrationStatus, Status
 from ..models.event import EventDTO
 from ..utils.validate_social_link import validate_social_link
 from ..utils.utils import str_to_Text
-
-class FormState:
-    """Represents the state of a form for a specific user."""
-    
-    def __init__(self, user_id: str, event_id: Optional[str] = None, language: str = "he"):
-        self.user_id = user_id
-        self.event_id = event_id
-        self.registration_id = None
-        self.language = language
-        self.current_question = "language"
-        self.answers: Dict[str, Any] = {}
-        self.completed = False
-        self.completion_date = None
-        self.created_at = asyncio.get_event_loop().time()
-        self.updated_at = asyncio.get_event_loop().time()
-    
-    def update_answer(self, step: str, answer: Any) -> None:
-        """Update answer for a specific step."""
-        self.answers[step] = answer
-        self.current_question = step
-        self.updated_at = asyncio.get_event_loop().time()
-        
-        if (step == "event_selection"):
-            self.event_id = answer
-        elif step == "language":
-            self.language = answer
-    
-    def update_registration_id(self, registration_id: str) -> None:
-        self.registration_id = registration_id
-        self.updated_at = asyncio.get_event_loop().time()
-        
-    def update_current_question(self, question: str) -> None:
-        self.current_question = question
-        self.updated_at = asyncio.get_event_loop().time()
-    
-    def get_answer(self, step: str) -> Optional[Any]:
-        """Get answer for a specific step."""
-        return self.answers.get(step)
-    
-    def is_step_completed(self, step: str) -> bool:
-        """Check if a specific step is completed."""
-        return step in self.answers
-    
-    def get_completion_percentage(self) -> float:
-        """Get form completion percentage."""
-        total_steps = 37
-        completed_steps = len(self.answers)
-        return (completed_steps / total_steps) * 100
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert FormState to dictionary for JSON serialization."""
-        return {
-            "user_id": self.user_id,
-            "event_id": self.event_id,
-            "registration_id": self.registration_id,
-            "language": self.language,
-            "current_question": self.current_question,
-            "answers": self.answers,
-            "completed": self.completed,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
-        }
-        
-    def get_language(self):
-        return self.language
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'FormState':
-        """Create FormState from dictionary."""
-        form_state = cls(
-            user_id=data["user_id"],
-            event_id=data.get("event_id"),
-            language=data.get("language", "he")
-        )
-        form_state.registration_id = data.get("registration_id")
-        form_state.current_question = data.get("current_question", "language")
-        form_state.answers = data.get("answers", {})
-        form_state.completed = data.get("completed", False)
-        form_state.created_at = data.get("created_at", asyncio.get_event_loop().time())
-        form_state.updated_at = data.get("updated_at", asyncio.get_event_loop().time())
-        return form_state
-
 
 class FormFlowService(BaseService):
     """
@@ -121,11 +40,10 @@ class FormFlowService(BaseService):
         """Initialize the form flow service."""
         super().__init__()
         self.sheets_service = sheets_service
-        self.file_storage = FileStorageService()
         self.user_service = UserService(sheets_service)
         self.event_service = EventService(sheets_service)
         self.registration_service = RegistrationService(sheets_service)
-        self.active_forms: Dict[str, FormState] = self.get_active_forms()
+        self.active_forms_service = ActiveFormsService(sheets_service)
         self.question_definitions = self._initialize_question_definitions()
         self.extra_texts: Dict[str, Text] = self._initialize_extra_text()
         self.admin_chat_id = os.getenv("ADMIN_USER_IDS")
@@ -1045,42 +963,6 @@ class FormFlowService(BaseService):
         shifts = self.event_service.get_DM_shifts()
         return [QuestionOption(value=shift.id, text=Text(he=f"{shift.start_date} - {shift.name}", en=f"{shift.start_date} - {shift.name}")) for shift in shifts]
     
-    def get_active_forms(self) -> Dict[str, FormState]:
-        """Get all active forms from file storage."""
-        try:
-            forms_data = self.file_storage.load_data("active_forms", {})
-            active_forms = {}
-            
-            for user_id, form_dict in forms_data.items():
-                try:
-                    active_forms[user_id] = FormState.from_dict(form_dict)
-                except Exception as e:
-                    self.log_error(f"Error loading form state for user {user_id}: {e}")
-                    continue
-            
-            self.log_info(f"Loaded {len(active_forms)} active forms from storage")
-            return active_forms
-            
-        except Exception as e:
-            self.log_error(f"Error loading active forms: {e}")
-            return {}
-    
-    def save_active_forms(self) -> bool:
-        """Save active forms to file storage."""
-        try:
-            forms_data = {}
-            for user_id, form_state in self.active_forms.items():
-                forms_data[user_id] = form_state.to_dict()
-            
-            success = self.file_storage.save_data("active_forms", forms_data)
-            if success:
-                self.log_info(f"Saved {len(self.active_forms)} active forms to storage")
-            return success
-            
-        except Exception as e:
-            self.log_error(f"Error saving active forms: {e}")
-            return False
-    
     async def initialize(self) -> None:
         """Initialize form flow service."""
         self.log_info("Initializing FormFlowService")
@@ -1094,16 +976,14 @@ class FormFlowService(BaseService):
     async def handle_register_start(self, user_id: str, event_id: Optional[str] = None, language: str = "he") -> Dict[str, Any]:
         try:
             # Check if user already has an active form
-            if user_id in self.active_forms:
+            existing_form = self.active_forms_service.get_form_by_user_id(user_id)
+            if existing_form:
                 self.log_info(f"User {user_id} already has an active form")
-                form_state = self.active_forms[user_id]
+                form_state = existing_form
             else:
-                # Create new form state
+                # Create and add new form state
                 form_state = FormState(user_id, event_id, language)
-                self.active_forms[user_id] = form_state
-                
-                # Save to storage
-                self.save_active_forms()
+                await self.active_forms_service.add_form(user_id, form_state)
             
             # Check if user is already registered for this event
             if event_id:
@@ -1155,16 +1035,17 @@ class FormFlowService(BaseService):
         """
         try:
             # Check if user already has an active form
-            if user_id in self.active_forms:
+            existing_form = self.active_forms_service.get_form_by_user_id(user_id)
+            if existing_form:
                 self.log_info(f"User {user_id} already has an active form")
-                form_state = self.active_forms[user_id]
+                form_state = existing_form
             else:
                 # Create new form state
                 form_state = FormState(user_id, event_id, language)
-                self.active_forms[user_id] = form_state
+                self.active_forms_service.add_form(user_id, form_state)
                 
                 # Save to storage
-                self.save_active_forms()
+                await self.active_forms_service.save_active_form(user_id, form_state)
             
             # Get the first question (language selection)
             first_question_def = self.question_definitions.get("language")
@@ -1188,10 +1069,9 @@ class FormFlowService(BaseService):
         Returns:
             Dictionary with next question or completion status
         """
-        if user_id not in self.active_forms:
+        form_state = self.active_forms_service.get_form_by_user_id(user_id)
+        if not form_state:
             raise ValueError(f"No active form found for user {user_id}")
-        
-        form_state = self.active_forms[user_id]
         
         # Validate current step answer
         validation_result = await self._validate_step_answer(
@@ -1213,7 +1093,7 @@ class FormFlowService(BaseService):
         form_state.current_question = next_step
         
         # Save to storage after any changes
-        self.save_active_forms()
+        await self.active_forms_service.save_active_form(str(user_id), form_state)
         
         if next_step == False:
             # Form completed
@@ -1239,7 +1119,7 @@ class FormFlowService(BaseService):
         Returns:
             Form state or None if not found
         """
-        return self.active_forms.get(user_id)
+        return self.active_forms_service.get_form_by_user_id(user_id)
     
     
     async def _update_form_completion_status(self, form_state: FormState) -> bool:
@@ -1338,9 +1218,8 @@ class FormFlowService(BaseService):
             # 4. Send completion message to user
             completion_message = await self._get_completion_message(form_state)
             
-            # 5. Clean up form state from memory and save to file storage
-            form = self.active_forms.pop(str(form_state.user_id), None)
-            self.save_active_forms()
+            # 5. Clean up form state from memory and remove from Google Sheets
+            self.active_forms_service.remove_form(form_state.user_id)
             
             # 6. Log completion
             self.log_info(f"Form completed successfully for user {form_state.user_id}")
@@ -1435,7 +1314,7 @@ class FormFlowService(BaseService):
         """Handle poll answer from Telegram."""
         try:
             # Get the form state for this user
-            form_state = self.active_forms.get(str(user_id))
+            form_state = self.active_forms_service.get_form_by_user_id(user_id)
             if not form_state:
                 self.log_error(f"No active form found for user {user_id}")
                 return
@@ -1463,7 +1342,7 @@ class FormFlowService(BaseService):
                 return
             
             # Update form state with the answer
-            form_state.update_answer(question_field, answer)
+            await self.active_forms_service.update_answer(user_id, question_field, answer)
             
             # Save answer to the appropriate table
             save_result = await self.save_answer_to_sheets(str(user_id), question_field, answer)
@@ -1493,7 +1372,7 @@ class FormFlowService(BaseService):
                     }
             
             # Save form state
-            self.save_active_forms()
+            await self.active_forms_service.save_active_form(str(user_id), form_state)
             
             # Get next question or complete form
             next_question = await self._get_next_question_for_field(question_field, form_state)
@@ -1508,7 +1387,7 @@ class FormFlowService(BaseService):
         user_id = update.effective_user.id
         try:
             # Get the form state for this user
-            form_state = self.active_forms.get(str(user_id))
+            form_state = self.active_forms_service.get_form_by_user_id(user_id)
             if not form_state:
                 self.log_error(f"No active form found for user {user_id}")
                 return
@@ -1537,13 +1416,14 @@ class FormFlowService(BaseService):
                     return validation_result
             
             # Update form state with the answer
+            await self.active_forms_service.update_answer(str(user_id), question_field, answer)
             form_state.update_answer(question_field, answer)
             
             # Save answer to the appropriate table
             await self.save_answer_to_sheets(str(user_id), question_field, answer)
             
             # Save form state
-            self.save_active_forms()
+            await self.active_forms_service.save_active_form(str(user_id), form_state)
             
             # Get next question or complete form
             next_question = await self._get_next_question_for_field(question_field, form_state)
@@ -1690,7 +1570,7 @@ class FormFlowService(BaseService):
             if next_question:
                 await self.extra_text_to_send(next_question, form_state)
                 form_state.current_question = next_question.question_id
-                self.save_active_forms()
+                await self.active_forms_service.update_form(str(form_state.user_id), form_state)
                 return next_question
             else:
                 # Form is complete
@@ -1815,7 +1695,11 @@ class FormFlowService(BaseService):
             if question_def.question_id == "event_selection":
                 return await self.save_event_selection_to_sheets(user_id, answer)
             elif question_def.question_id == "relevant_experience":
-                event_type = await self._get_event_type(self.active_forms[user_id].event_id)
+                form_state = self.active_forms_service.get_form_by_user_id(user_id)
+                if not form_state:
+                    self.log_error(f"No active form found for user {user_id}")
+                    return False
+                event_type = await self._get_event_type(form_state.event_id)
                 return await self.user_service.save_relevant_experience(user_id, event_type, answer)
             
             # Determine which table to save to based on save_to field
@@ -1825,7 +1709,11 @@ class FormFlowService(BaseService):
             else:
                 # Save to registration table
                 # TODO get reg_id from user_id
-                form = self.active_forms[user_id]
+                form_state = self.active_forms_service.get_form_by_user_id(user_id)
+                if not form_state:
+                    self.log_error(f"No active form found for user {user_id}")
+                    return False
+                form = form_state
                 event_id = form.event_id
                 reg_id = self.registration_service.get_registration_id_by_user_id(user_id, event_id)
                 if not reg_id:
@@ -1865,14 +1753,14 @@ class FormFlowService(BaseService):
                     return True
                 
                 # Update the form state to indicate the error
-                form_state = self.active_forms.get(user_id)
+                form_state = self.active_forms_service.get_form_by_user_id(user_id)
                 if form_state:
                     form_state.answers["event_selection_error"] = {
                         "already_registered": True,
                         "registration_id": existing_registration.get('registration_id'),
                         "status": existing_registration.get('status')
                     }
-                    self.save_active_forms()
+                    await self.active_forms_service.save_active_form(str(user_id), form_state)
                 
                 return False
             
@@ -1885,8 +1773,12 @@ class FormFlowService(BaseService):
                 self.log_error(f"Failed to save event selection to sheets for user {user_id}, event {event_id}")
                 return False
             
-            self.active_forms[user_id].registration_id = registration.id
-            self.save_active_forms()
+            form_state = self.active_forms_service.get_form_by_user_id(user_id)
+            if not form_state:
+                self.log_error(f"No active form found for user {user_id}")
+                return False
+            form_state.registration_id = registration.id
+            await self.active_forms_service.save_active_form(str(user_id), form_state)
             return result
             
         except Exception as e:
