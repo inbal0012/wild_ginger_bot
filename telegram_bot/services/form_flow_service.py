@@ -462,7 +462,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="partner_or_single", value="single", operator="equals")
+                        SkipConditionItem(type="field_value", field="partner_or_single", value="single", operator="equals"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 )
             ),
@@ -491,7 +492,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals")
+                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals"),
+                        SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 )
             ),
@@ -837,7 +839,7 @@ class FormFlowService(BaseService):
             "wants_to_helper": QuestionDefinition(
                 question_id="wants_to_helper",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מעוניין/ת לעזור בהכנות לאירוע?", en="Do you want to help  the event?"),
+                title=Text(he="האם את/ה מעוניין/ת לעזור בהכנות לאירוע?", en="Do you want to help  the event?"),
                 required=True,
                 save_to="Registrations",
                 order=33,
@@ -859,7 +861,7 @@ class FormFlowService(BaseService):
             "helper_shifts": QuestionDefinition(
                 question_id="helper_shifts",
                 question_type=QuestionType.MULTI_SELECT,
-                title=Text(he="מתי אתה/את מעוניין/ת לעזור באירוע?", en="When do you want to help at the event?"),
+                title=Text(he="מתי את/ה מעוניין/ת לעזור באירוע?", en="When do you want to help at the event?"),
                 required=True,
                 save_to="Registrations",
                 order=34,
