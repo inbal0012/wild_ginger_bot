@@ -1,3 +1,5 @@
+from telegram import Update, BotCommand, User
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, MessageHandler, filters
 from telegram.constants import ParseMode
 import os
 from dotenv import load_dotenv
@@ -210,6 +212,15 @@ class WildGingerBot(BaseService):
         else:
             await update.message.reply_text(self.message_service.get_message(teleg_user.language_code, 'status_no_name'))
         
+        
+        # button1 = InlineKeyboardButton(text="Button1", callback_data="btn1")
+        # button2 = InlineKeyboardButton(text="Button2", callback_data="btn2")
+        # inline_keyboard = InlineKeyboardMarkup([[button1]])
+        # await update.message.reply_text(
+        #     "Welcome to the Bot!",
+        #     reply_markup=inline_keyboard
+        # )
+        
         # TODO
         return
         # Get the submission ID for this user (from local storage)
@@ -351,6 +362,33 @@ class WildGingerBot(BaseService):
                 await update.message.reply_text(next_question['message'], parse_mode=ParseMode.MARKDOWN)
         
         return
+
+    async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        if query.data == "btn1":
+            await query.edit_message_text(text="Btn1 is pressed.")
+        elif query.data == "btn2":
+            await query.edit_message_text(text="Btn2 is pressed.")
+
+    async def update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        sheet_data = self.sheets_service.get_data_from_sheet("Registrations")
+        if not sheet_data:
+            return False
+        
+        headers = sheet_data['headers']
+        rows = sheet_data['rows']
+        
+        user_id_col = headers.index('user_id')
+        # get all uniqe users from the user_id_col
+        unique_users = set(row[user_id_col] for row in rows if row[user_id_col])
+        unique_users = ["332883645", "846858195", "7333736051"]
+        for user_id in unique_users:
+            try:
+                await self.app.bot.send_message(user_id, "update")
+            except Exception as e:
+                self.log_error(f"Error sending message to user {user_id}: {e}")
+
     
     async def get_language_from_user(self, user_id: str):
         user_data = self.user_service.get_user_by_telegram_id(user_id)
@@ -442,6 +480,7 @@ class WildGingerBot(BaseService):
         app.add_handler(CommandHandler("status", self.status))
         app.add_handler(CommandHandler("help", self.help_command))
         app.add_handler(CommandHandler("register", self.register))
+        app.add_handler(CommandHandler("update", self.update))
         # app.add_handler(CommandHandler("remind_partner", remind_partner))
         # app.add_handler(CommandHandler("cancel", cancel_registration))
         # app.add_handler(CommandHandler("get_to_know", get_to_know_command))
@@ -449,6 +488,7 @@ class WildGingerBot(BaseService):
         # Poll handlers
         app.add_handler(PollAnswerHandler(self.handle_poll_answer))
         
+        app.add_handler(CallbackQueryHandler(self.handle_callback_query))
         # Admin commands
         # app.add_handler(CommandHandler("admin_dashboard", admin_dashboard))
         # app.add_handler(CommandHandler("admin_approve", admin_approve))
