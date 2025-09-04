@@ -42,16 +42,22 @@ class UserService:
         new_row[self.headers['full_name']] = user.full_name
         new_row[self.headers['language']] = user.language
         
+        # Set optional fields if they exist in headers
+        if 'relevant_experience' in self.headers:
+            new_row[self.headers['relevant_experience']] = "{}"  # Empty experience dict
+        if 'is_returning_participant' in self.headers:
+            new_row[self.headers['is_returning_participant']] = ""  # Empty for new users
+        
         # Add the row to the sheet
         result = await self.sheets_service.append_row("Users", new_row)
         
         return result
         
-    async def update_user_field(self, user_id: str, field: str, value: str):
-        return await self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", field, value)
+    def update_user_field(self, user_id: str, field: str, value: str):
+        return self.sheets_service.update_cell(user_id, "telegram_user_id", "Users", field, value)
     
     async def save_relevant_experience(self, user_id: str, event_type: str, answer: str):
-        user = await self.get_user_by_telegram_id(user_id)
+        user = self.get_user_by_telegram_id(user_id)
         if user:
             user_experience = user[self.headers["relevant_experience"]]
             if user_experience:
@@ -68,7 +74,12 @@ class UserService:
             else:
                 user_experience[event_type] = answer
             
-            await self.update_user_field(user_id, "relevant_experience", str(user_experience))
+            exp_str = str(user_experience)
+            self.update_user_field(user_id, "relevant_experience", exp_str)
             return True
         return False
     
+    def get_user_language(self, user_id: str) -> str:
+        user = self.get_user_by_telegram_id(user_id)
+        if user:
+            return user[self.headers["language"]]

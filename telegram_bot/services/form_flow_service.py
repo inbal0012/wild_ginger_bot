@@ -56,7 +56,7 @@ class FormFlowService(BaseService):
         return{
             "full_name": Text(he="*פרטים אישיים*\nאיזה כיף שאתה מתעניין באירוע! נעבור על כמה שאלות כל מנת להכיר אותך טוב יותר.", 
                             en="*Personal details*\nIt's great that you're interested in the event! We'll go through a few questions to get to know you better."),
-            "bdsm_experience": Text(he='*בואו נדבר בדס"מ*\nנעים מהכיר! היות ומדובר על אירוע בדסמי נעבור כעת על כמה שאלות בנושא.', 
+            "bdsm_experience": Text(he='*בואו נדבר בדס"מ*\nנעים להכיר! היות ומדובר על אירוע בדסמי נעבור כעת על כמה שאלות בנושא.', 
                                     en="*Let's talk BDSM*\nNice to meet you! Since this is a BDSM event, we'll go through a few questions on the subject."),
             "food_restrictions": Text(he="*אוכל ושאר ירקות*", en="*Food, truffles, and trifles*"),
             "agree_participant_commitment": Text(he="*חוקים*\n כמעט סוף. בואו נעבור על חוקי הליין, המקום וכו'.", 
@@ -260,8 +260,8 @@ class FormFlowService(BaseService):
                 required=True,
                 save_to="Registrations",
                 order=9,
-                placeholder=Text(he="DD/MM/YYYY\n\nמארגני הליין אינם מאמתים את מצב הבריאות של המשתתפים/ות, ואינם נושאים בכל אחריות ישירה או עקיפה בנוגע למחלות מין, הדבקה או השלכות רפואיות אחרות.\nבאחריות כל משתתף/ת לוודא את מצב בריאותו/ה ולקיים שיחות בדיקות עם פרטנרים בהתאם לשיקול דעתם האישי.", 
-                                en="DD/MM/YYYY\n\nThe line organizers do not verify the health status of participants and bear no direct or indirect responsibility regarding sexually transmitted infections (STIs), transmission, or any other medical consequences.\nEach participant is solely responsible for their own health and for engaging in discussions about test results with partners at their own discretion."),
+                placeholder=Text(he=f"DD/MM/YYYY\n{skip.he}\n\nמארגני הליין אינם מאמתים את מצב הבריאות של המשתתפים/ות, ואינם נושאים בכל אחריות ישירה או עקיפה בנוגע למחלות מין, הדבקה או השלכות רפואיות אחרות.\nבאחריות כל משתתף/ת לוודא את מצב בריאותו/ה ולקיים שיחות בדיקות עם פרטנרים בהתאם לשיקול דעתם האישי.", 
+                                en=f"DD/MM/YYYY\n{skip.en}\n\nThe line organizers do not verify the health status of participants and bear no direct or indirect responsibility regarding sexually transmitted infections (STIs), transmission, or any other medical consequences.\nEach participant is solely responsible for their own health and for engaging in discussions about test results with partners at their own discretion."),
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
@@ -535,6 +535,7 @@ class FormFlowService(BaseService):
                     operator="OR",
                     conditions=[
                         SkipConditionItem(type="field_value", field="contact_type", value="other", operator="not_in"),
+                        SkipConditionItem(type="field_value", field="is_play_with_partner_only", value="partner_only", operator="equals"),
                         SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 ),
@@ -588,6 +589,7 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
+                        SkipConditionItem(type="field_value", field="share_bdsm_interests", operator="equals", value="no"),
                         SkipConditionItem(type="event_type", value="cuddle", operator="equals")
                     ]
                 ),
@@ -685,7 +687,13 @@ class FormFlowService(BaseService):
                         rule_type=ValidationRuleType.REQUIRED,
                         error_message=Text(he="אנא בחר לפחות אופציה אחת", en="Please select at least one option")
                     )
-                ]
+                ],
+                skip_condition=SkipCondition(
+                    operator="OR",
+                    conditions=[
+                        SkipConditionItem(type="user_exists", field="food_restrictions")
+                    ]
+                ),
             ),
             # 26 food_comments
             "food_comments": QuestionDefinition(
@@ -706,7 +714,8 @@ class FormFlowService(BaseService):
                 skip_condition=SkipCondition(
                     operator="OR",
                     conditions=[
-                        SkipConditionItem(type="field_value", field="food_restrictions", operator="equals", value="no")
+                        SkipConditionItem(type="field_value", field="food_restrictions", operator="equals", value="no"),
+                        SkipConditionItem(type="user_exists", field="food_restrictions")
                     ]
                 )
             ),
@@ -828,7 +837,7 @@ class FormFlowService(BaseService):
             "wants_to_helper": QuestionDefinition(
                 question_id="wants_to_helper",
                 question_type=QuestionType.BOOLEAN,
-                title=Text(he="האם אתה/את מעוניין/ת לעזור באירוע?", en="Do you want to help at the event?"),
+                title=Text(he="האם אתה/את מעוניין/ת לעזור בהכנות לאירוע?", en="Do you want to help  the event?"),
                 required=True,
                 save_to="Registrations",
                 order=33,
@@ -1178,14 +1187,23 @@ class FormFlowService(BaseService):
     
     def _create_partner_registration_link(self, form_state: FormState) -> str:
         """Get partner link from form state."""
-        return f"https://t.me/{form_state.get_answer('partner_telegram_link')}?text={self._create_partner_registration_message(form_state)}"
+        import urllib.parse
+        message_text = self._create_partner_registration_message(form_state)
+        encoded_message = urllib.parse.quote(message_text)
+        link = f"https://t.me/{self.clean_partner_telegram_link(form_state.get_answer('partner_telegram_link'))}?text={encoded_message}"
+        return link
+    
+    def clean_partner_telegram_link(self, link: str) -> str:
+        """Clean partner telegram link."""
+        return link.replace("https://t.me/", "").replace("http://t.me/", "").replace("www.t.me/", "").replace("t.me/", "").replace("@", "")
     
     def _create_partner_registration_message(self, form_state: FormState) -> str:
         """Get partner link from form state."""
+        event = self.event_service.get_event_by_id(form_state.event_id)
         if form_state.get_language() == "he":
-            return f"המשך להרשמה של בעלת החברה: {self._create_partner_registration_link(form_state)}"
+            return f"היי! נרשמתי לאירוע '{event.name}' בתאריך {event.start_date}, רשמתי אותך בתור הפרטנר/ית שלי. על מנת שנוכל להגיע יש צורך גם בטופס מלא שלך. \nניתן להרשם דרך הבוט של Wild Ginger Bot: @WildGingerBot"
         else:
-            return f"Continue to partner registration: {self._create_partner_registration_link(form_state)}"
+            return f"Hello! I have registered for the event '{event.name}' on {event.start_date}, I have registered you as my partner. In order for us to arrive, we need your full form too. \nYou can register via the Wild Ginger Bot: @WildGingerBot"
     
     async def _get_event_details(self, event_id: str) -> EventDTO:
         """Get event details from sheets."""
@@ -1248,7 +1266,7 @@ class FormFlowService(BaseService):
             self.log_error(f"No user name found for user {form_state.user_id}")
             return
         
-        message = f"Form completed by user @{user['telegram']}\n"   
+        message = f"Form completed by user @{user[self.user_service.headers['telegram']]}\n"   
         message += f"Event: {form_state.event_id}\n"
         message += f"Registration ID: {form_state.registration_id}\n"
         message += f"Answers: \n"
@@ -1280,17 +1298,32 @@ class FormFlowService(BaseService):
     async def _get_completion_message(self, form_state: FormState) -> Dict[str, str]:
         """Get appropriate completion message based on form answers."""
         try:
+            language = self.user_service.get_user_language(form_state.user_id)
+            if not language:
+                self.log_error(f"No user found for user {form_state.user_id}")
+                language = form_state.get_language()
+            
             if form_state.get_answer("would_you_like_to_register") == "no":
-                if form_state.get_language() == "he":
+                if language == "he":
                     return "תודה על העניין שלך! אם תשנה את דעתך, אתה תמיד יכול לחזור ולהרשם."
                 else:
                     return "Thank you for your interest! If you change your mind, you can always come back and register."
             
+            message = ""
             # Default completion message
-            if form_state.get_language() == "he":
-                return "🎉 תודה על ההרשמה! הטופס הושלם בהצלחה.\n\nנציג יצור איתך קשר בקרוב עם פרטים נוספים על האירוע.\n\nאתה יכול לבדוק את הסטטוס שלך בכל זמן עם הפקודה /status"
+            if language == "he":
+                message = "🎉 תודה על ההרשמה! הטופס הושלם בהצלחה.\n\nנציג יצור איתך קשר בקרוב עם פרטים נוספים על האירוע.\n\nאתה יכול לבדוק את הסטטוס שלך בכל זמן עם הפקודה /status"
             else:
-                return "🎉 Thank you for registering! The form has been completed successfully.\n\nA representative will contact you soon with more details about the event.\n\nYou can check your status anytime using the /status command"
+                message = "🎉 Thank you for registering! The form has been completed successfully.\n\nA representative will contact you soon with more details about the event.\n\nYou can check your status anytime using the /status command"
+            
+            if form_state.get_answer("partner_or_single") == "partner":
+                partner_link = self._create_partner_registration_link(form_state)
+                if language == "he":
+                    message += f"\n\nיצרנו עבורך קישור נוח לשליחה לפרטנר/ית שלך. [לחץ כאן]({partner_link})"
+                else:
+                    message += f"\n\nWe have created a convenient link for you to send to your partner. [Click here]({partner_link})"
+            
+            return message
             
         except Exception as e:
             self.log_error(f"Error getting completion message for {form_state.user_id}: {e}")
@@ -1609,6 +1642,15 @@ class FormFlowService(BaseService):
     
     def get_event_description(self, event_details: EventDTO) -> str:
         """Get event description from event details."""
+        if event_details.balance == "play":
+            balance_text = '• ההרשמה *באיזון משחקי*. (כלומר מישהו שאתם מתכוונים לשחק איתו)\nאנו בעד "בופה" ומברכים שילובים או עירבובים לפי רצון המשתתפים. אך על מנת לוודא שלא תצאו מהאירוע רעבים, ושלא תבואו במוד ציידים אנו מצפים שתביאו חטיף מהבית.'
+        elif event_details.balance == "relative":
+            balance_text = "• שימו ♥ - האירוע *באיזון יחסי*. כלומר יש סיכוי לעד 10-15% יותר גברים מנשים (או להיפך)."
+        elif event_details.balance == "gender":
+            balance_text = "• ההרשמה *באיזון מגדרי*. ניתן להרשם לבד ולהכנס לרשימת ההמתנה. הליין יאשר אנשים מתוך הרשימות בהתאמה להרשמה בודדה מקבילה ולמקום באירוע."
+        else:
+            balance_text = "• אין צורך באיזון"
+            
         return f'''
 י Wild Ginger גאים להציג:
 {event_details.name}
@@ -1630,10 +1672,9 @@ class FormFlowService(BaseService):
 ניתן להוזיל את המחיר ע"י הצטרפות לצוות כהלפר ו/או דיאמ (פרטים בעמוד האחרון)
 
 
-* ההרשמה באיזון משחקי. (כלומר מישהו שאתם מתכוונים לשחק איתו)
-אנו מברכים שילובים או עירבובים לפי רצון המשתתפים. אך מצפים שתביאו חטיף מהבית ולא שתבואו לצוד באירוע.
-** כל אירועינו הינם להטבק פרנדלי, ואנו עושות את המיטב כדי לייצר מרחב נעים ומזמין לאנשימות מכל הקשת. 🏳️‍🌈��
-*** הרשמה בטופס זה אינה מהווה אישור הגעה. זאת הזמנה ובדיקת עניין בלבד. במידה ויש התאמה נחזור אליך. 🙃😊
+{balance_text}
+•• כל אירועינו הינם סטרייט פרנדלי, ואנו עושות את המיטב כדי לייצר מרחב נעים ומזמין לאנשימות מכל הקשת. 🏳️‍🌈��
+••• הרשמה בטופס זה אינה מהווה אישור הגעה. זאת הזמנה ובדיקת עניין בלבד. במידה ויש התאמה נחזור אליך. 🙃😊
 
     '''
     
@@ -1647,10 +1688,10 @@ class FormFlowService(BaseService):
                 if condition.type == "field_value":
                     field_value = form_state.get_answer(condition.field)
                     if condition.operator == "equals":
-                        if field_value == condition.value or (not field_value) or field_value == "":
+                        if (not field_value) or field_value == condition.value or field_value == "":
                             return True
                     elif condition.operator == "not_in":
-                        if field_value not in condition.value:
+                        if (not field_value) or field_value not in condition.value:
                             return True
                 
                 elif condition.type == "user_exists":

@@ -32,6 +32,7 @@ class EventDTO:
     participant_commitment: str
     line_rules: str
     place_rules: str
+    balance: str
     is_public: bool
     main_group_id: str
     singles_group_id: str

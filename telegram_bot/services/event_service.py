@@ -45,7 +45,8 @@ class EventService:
             schedule=row[self.headers['schedule']],
             participant_commitment=row[self.headers['participant_commitment']],
             line_rules=row[self.headers['line_rules']],
-            place_rules=row[self.headers['place_rules']]
+            place_rules=row[self.headers['place_rules']],
+            balance=row[self.headers['balance']]
         )
 
     def get_event_by_id(self, event_id: str) -> Optional[EventDTO]:

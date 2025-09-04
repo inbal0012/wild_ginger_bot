@@ -333,7 +333,7 @@ class WildGingerBot(BaseService):
                 await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
                 # await update.message.reply_text(next_question['message'])
-                await self.app.bot.send_message(user_id, next_question['message'])
+                await self.app.bot.send_message(user_id, next_question['message'], parse_mode=ParseMode.MARKDOWN)
     
     async def handle_text_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle all text messages"""
@@ -348,7 +348,7 @@ class WildGingerBot(BaseService):
             if isinstance(next_question, QuestionDefinition):
                 await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
-                await update.message.reply_text(next_question['message'])
+                await update.message.reply_text(next_question['message'], parse_mode=ParseMode.MARKDOWN)
         
         return
     

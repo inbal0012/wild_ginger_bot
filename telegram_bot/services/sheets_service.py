@@ -8,6 +8,7 @@ from ..services.base_service import BaseService
 
 class SheetsService(BaseService):
     def __init__(self):
+        super().__init__()
         self.spreadsheet = settings.sheets_service
         self.spreadsheet_id = settings.google_sheets_spreadsheet_id
         self.range_name = settings.google_sheets_range
@@ -541,12 +542,12 @@ class SheetsService(BaseService):
         else:
             return 'en'  # Default to English
 
-    def update_range(self, range_name: str, value: str) -> bool:    
+    def update_range(self, range_name: str, value: List[Any]) -> bool:    
         result = self.spreadsheet.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
             range=range_name,
             valueInputOption='RAW',
-            body={'values': [[value]]}
+            body={'values': [value]}
         ).execute()
         return result
     
@@ -565,5 +566,45 @@ class SheetsService(BaseService):
             self.log_error(f"❌ Error appending row: {e}")
             return False
     
+    def delete_row(self, sheet_name: str, row_index: int) -> bool:
+        """Delete a row from the sheet"""
+        try:
+            # First, get the sheet ID for the given sheet name
+            spreadsheet_metadata = self.spreadsheet.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            
+            sheet_id = None
+            for sheet in spreadsheet_metadata.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+            
+            if sheet_id is None:
+                self.log_error(f"Sheet '{sheet_name}' not found")
+                return False
+            
+            # Use batchUpdate with deleteDimension request to delete the entire row
+            request_body = {
+                'requests': [{
+                    'deleteDimension': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'dimension': 'ROWS',
+                            'startIndex': row_index + 1,  # +1 to account for header row
+                            'endIndex': row_index + 2
+                        }
+                    }
+                }]
+            }
+            
+            result = self.spreadsheet.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body=request_body
+            ).execute()
+            return result
+        except Exception as e:
+            self.log_error(f"❌ Error deleting row: {e}")
+            return False
     
     
