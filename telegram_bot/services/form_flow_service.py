@@ -106,8 +106,12 @@ class FormFlowService(BaseService):
                 save_to="Users",
                 order=2,
                 options=[
-                    QuestionOption(value="play", text=Text(he="משחק", en="Play")),
-                    QuestionOption(value="cuddle", text=Text(he="כירבולייה", en="Cuddle"))
+                    QuestionOption(value="play", text=Text(he="פליי בדסמי", en="Play")),
+                    QuestionOption(value="cuddle", text=Text(he="כירבולייה", en="Cuddle")),
+                    QuestionOption(value="sexual", text=Text(he="אירועי מיניות", en="Sexual")),
+                    QuestionOption(value="munch", text=Text(he="מאנץ'", en="Munch")),
+                    QuestionOption(value="nudity", text=Text(he="נודיזם (עירום לא מיני)", en="Nudity (non-sexual)")),
+                    QuestionOption(value="cocktails", text=Text(he="ערבי קוקטיילים", en="Cocktail Night")),
                 ],
                 validation_rules=[
                     ValidationRule(
@@ -275,7 +279,7 @@ class FormFlowService(BaseService):
                     ),
                     ValidationRule(
                         rule_type=ValidationRuleType.DATE_RANGE,
-                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין", en="Invalid date. Please enter a valid date")
+                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין DD/MM/YYYY", en="Invalid date. Please enter a valid date DD/MM/YYYY")
                     )
                 ]
             ),
@@ -327,7 +331,7 @@ class FormFlowService(BaseService):
                     ),
                     ValidationRule(
                         rule_type=ValidationRuleType.DATE_RANGE,
-                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין", en="Invalid date. Please enter a valid date")
+                        error_message=Text(he="התאריך אינו תקין. אנא הזן תאריך תקין DD/MM/YYYY", en="Invalid date. Please enter a valid date DD/MM/YYYY")
                     ),
                     ValidationRule(
                         rule_type=ValidationRuleType.AGE_RANGE,
