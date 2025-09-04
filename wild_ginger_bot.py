@@ -461,7 +461,7 @@ class WildGingerBot(BaseService):
         app.add_handler(CommandHandler("status", self.status))
         app.add_handler(CommandHandler("help", self.help_command))
         app.add_handler(CommandHandler("register", self.register))
-        app.add_handler(CommandHandler("update", self.update))
+        # app.add_handler(CommandHandler("update", self.update))
         # app.add_handler(CommandHandler("remind_partner", remind_partner))
         # app.add_handler(CommandHandler("cancel", cancel_registration))
         # app.add_handler(CommandHandler("get_to_know", get_to_know_command))
