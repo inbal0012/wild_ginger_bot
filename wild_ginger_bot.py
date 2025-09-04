@@ -1,12 +1,11 @@
-from telegram import Update, BotCommand, User, PollAnswer
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, PollAnswerHandler, PollHandler, MessageHandler, filters
+from telegram.constants import ParseMode
 import os
 from dotenv import load_dotenv
 import logging
-from typing import List, Dict
+from typing import List
 
 from telegram_bot.models.form_flow import QuestionDefinition, QuestionType, QuestionOption
-from telegram_bot.models.TelegramPollFields import TelegramPollFields, TelegramPollData
+from telegram_bot.models.TelegramPollFields import TelegramPollFields
 from telegram_bot.models.user import CreateUserFromTelegramDTO
 
 from telegram_bot.services.base_service import BaseService
@@ -17,6 +16,7 @@ from telegram_bot.services.form_flow_service import FormFlowService
 from telegram_bot.services.file_storage_service import FileStorageService
 from telegram_bot.services.registration_service import RegistrationService
 from telegram_bot.services.event_service import EventService
+from telegram_bot.services.poll_data_service import PollDataService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -34,7 +34,7 @@ class WildGingerBot(BaseService):
         self.message_service = MessageService()
         self.form_flow_service = FormFlowService(self.sheets_service)
         self.file_storage = FileStorageService()
-        self.poll_data = self.load_poll_data()
+        self.poll_data_service = PollDataService(self.sheets_service)
         self.log_info("WildGingerBot initialized successfully")
     
     async def initialize(self) -> None:
@@ -311,18 +311,21 @@ class WildGingerBot(BaseService):
         user_id = poll_answer.user.id
         selected_options = poll_answer.option_ids
         
-        if poll_id not in self.poll_data:
+        poll_info = self.poll_data_service.get_poll_by_id(poll_id)
+        if not poll_info:
+            self.log_error(f"Poll {poll_id} not found")
             return
         
-        self.update_poll_data(poll_answer)
+        self.log_info(f"Poll info: {poll_info}")
         
-        # Save to storage after vote update
-        self.save_poll_data(self.poll_data)
+        # update poll data
+        success = await self.poll_data_service.update_poll(poll_answer)
+        if not success:
+            self.log_error(f"Failed to save updated poll {poll_id}")
+            return
+        else:
+            self.log_info(f"Poll {poll_id} updated successfully")
         
-        # The FormFlowService will handle saving to the appropriate table
-        # based on the save_to field in the question definition
-        
-        poll_info = self.poll_data[poll_id]
         # Handle the poll answer in the form flow service
         next_question = await self.form_flow_service.handle_poll_answer(poll_info['question_field'], str(user_id), selected_options)
         if next_question:
@@ -397,7 +400,7 @@ class WildGingerBot(BaseService):
             )
 
             # Store poll data
-            self.poll_data[message.poll.id] = {
+            poll_info = {
                     "id": message.poll.id,
                     "question_field": question_field.question_id,
                     "question": poll_fields.question,
@@ -409,60 +412,18 @@ class WildGingerBot(BaseService):
                     "votes": {i: [] for i in range(len(poll_fields.options))}
             }
 
-            # Save to storage
-            self.save_poll_data(self.poll_data)
+            # Save to storage using PollDataService
+            success = await self.poll_data_service.save_single_poll(message.poll.id, poll_info)
+            if not success:
+                self.log_error(f"Failed to save poll {message.poll.id}")
         except Exception as e:
             logger.error(f"Error sending poll: {e}")
-            
+    
     def parse_poll_options(self, options: List[QuestionOption], language: str):
+        """Parse poll options to get text in the specified language."""
         if not options:
             return []
         return [option.text.get(language) for option in options]
-         
-    def update_poll_data(self, poll_answer: PollAnswer):
-        poll_id = poll_answer.poll_id
-        user_id = poll_answer.user.id
-        selected_options = poll_answer.option_ids
-        
-        # Update vote tracking
-        poll_info = self.poll_data[poll_id]
-        self.log_info(f"Poll info: {poll_info}")
-        
-        # Remove user's previous votes
-        for option_id in poll_info['votes']:
-            if user_id in poll_info['votes'][option_id]:
-                poll_info['votes'][option_id].remove(user_id)
-        
-        # Add new votes
-        for option_id in selected_options:
-            if option_id not in poll_info['votes']:
-                poll_info['votes'][option_id] = []
-            poll_info['votes'][option_id].append(user_id)
-
-        self.log_info(f"Poll {poll_id}: User {user_id} voted for options {selected_options}")
-
-        
-    def save_poll_data(self, poll_data: Dict[str, TelegramPollData]) -> bool:
-        """Save poll data to file storage."""
-        try:
-            success = self.file_storage.save_data("poll_data", poll_data)
-            if success:
-                logger.info(f"Saved poll data to storage")
-            return success
-        except Exception as e:
-            logger.error(f"Error saving poll data: {e}")
-            return False
-        
-    def load_poll_data(self) -> dict:
-        """Load poll data from file storage."""
-        try:
-            poll_data = self.file_storage.load_data("poll_data", {})
-            # create a dict with the id as the key
-            logger.info(f"Loaded {len(poll_data)} polls from storage")
-            return poll_data
-        except Exception as e:
-            logger.error(f"Error loading poll data: {e}")
-            return {}
     
     def build_app(self):        
         self.log_info("Building Telegram application...")
