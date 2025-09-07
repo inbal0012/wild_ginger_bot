@@ -1073,56 +1073,6 @@ class FormFlowService(BaseService):
             self.log_error(f"Error starting form for user {user_id}: {e}")
             return None
     
-    async def process_answer(self, user_id: str, answer: Any) -> Dict[str, Any]:
-        """
-        Process user answer and return next question.
-        
-        Args:
-            user_id: User identifier
-            answer: User's answer
-            
-        Returns:
-            Dictionary with next question or completion status
-        """
-        form_state = self.active_forms_service.get_form_by_user_id(user_id)
-        if not form_state:
-            raise ValueError(f"No active form found for user {user_id}")
-        
-        # Validate current step answer
-        validation_result = await self._validate_step_answer(
-            form_state.current_question, answer, form_state
-        )
-        
-        if not validation_result["valid"]:
-            return {
-                "error": True,
-                "message": validation_result["message"],
-                "question": await self._get_question(form_state.current_question, form_state)
-            }
-        
-        # Save answer
-        form_state.update_answer(form_state.current_question, answer)
-        
-        # Move to next step
-        next_step = await self._get_next_step(form_state.current_question, answer, form_state)
-        form_state.current_question = next_step
-        
-        # Save to storage after any changes
-        await self.active_forms_service.save_active_form(str(user_id), form_state)
-        
-        if next_step == False:
-            # Form completed
-            form_state.completed = True
-            return await self._complete_form(form_state)
-        else:
-            # Get next question
-            next_question = await self._get_question(next_step, form_state)
-            return {
-                "form_id": f"{form_state.user_id}_{form_state.event_id}",
-                "current_question": next_step,
-                "question": next_question,
-                "progress": form_state.get_completion_percentage()
-            }
     
     async def get_form_state(self, user_id: str) -> Optional[FormState]:
         """
@@ -1386,6 +1336,29 @@ class FormFlowService(BaseService):
             # Save answer to the appropriate table
             save_result = await self.save_answer_to_sheets(str(user_id), question_field, answer)
             
+            if question_field == "event_selection":
+                event = self.event_service.get_event_by_id(answer)
+                if not event:
+                    self.log_error(f"No event found for event {answer}")
+                    return
+                
+                if form_state.language == "he":
+                    message = f"🎉 ברוכים הבאים לאירוע '{event.name}'!\n\n"
+                    message += f"להרשמה לאירוע, אנא מלאו את הטופס החיצוני:\n{event.form_link}\n\n"
+                    message += "לאחר מילוי הטופס, תוכלו לבדוק את הסטטוס שלכם עם הפקודה /status\n"
+                    message += "ניתן להרשם לאירועים נוספים עם הפקודה /register"
+                else:
+                    message = f"🎉 Welcome to the event '{event.name}'!\n\n"
+                    message += f"To register for the event, please fill out the external form:\n{event.form_link}\n\n"
+                    message += "After filling out the form, you can check your status with the /status command\n"
+                    message += "You can register for more events with the /register command"
+                    
+                await self._complete_form(form_state)
+                return {
+                    "message": message,
+                    "form_link": event.form_link,
+                }
+
             # Check if save failed due to re-registration
             if not save_result and question_field == "event_selection":
                 error_info = form_state.get_answer("event_selection_error")
@@ -1644,7 +1617,12 @@ class FormFlowService(BaseService):
         try:    
             await self.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.MARKDOWN)
         except Exception as e:
-            self.log_error(f"Error sending text message to user {user_id}: {e}")
+            # If markdown parsing fails, try sending without markdown
+            try:
+                self.log_error(f"Markdown parsing failed for user {user_id}, retrying without markdown: {e}")
+                await self.bot.send_message(chat_id=user_id, text=text)
+            except Exception as e2:
+                self.log_error(f"Error sending text message to user {user_id}: {e2}")
     
     def get_event_description(self, event_details: EventDTO) -> str:
         """Get event description from event details."""

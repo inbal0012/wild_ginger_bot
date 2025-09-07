@@ -344,7 +344,15 @@ class WildGingerBot(BaseService):
                 await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
                 # await update.message.reply_text(next_question['message'])
-                await self.app.bot.send_message(user_id, next_question['message'], parse_mode=ParseMode.MARKDOWN)
+                try:
+                    await self.app.bot.send_message(user_id, next_question['message'], parse_mode=ParseMode.MARKDOWN)
+                except Exception as e:
+                    # If markdown parsing fails, try sending without markdown
+                    try:
+                        self.log_error(f"Markdown parsing failed for user {user_id}, retrying without markdown: {e}")
+                        await self.app.bot.send_message(user_id, next_question['message'])
+                    except Exception as e2:
+                        self.log_error(f"Error sending message to user {user_id}: {e2}")
     
     async def handle_text_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle all text messages"""
@@ -359,7 +367,15 @@ class WildGingerBot(BaseService):
             if isinstance(next_question, QuestionDefinition):
                 await self.send_question_as_telegram_message(next_question, await self.get_language_from_user(user_id), str(user_id))        
             else:
-                await update.message.reply_text(next_question['message'], parse_mode=ParseMode.MARKDOWN)
+                try:
+                    await update.message.reply_text(next_question['message'], parse_mode=ParseMode.MARKDOWN)
+                except Exception as e:
+                    # If markdown parsing fails, try sending without markdown
+                    try:
+                        self.log_error(f"Markdown parsing failed for user {user_id}, retrying without markdown: {e}")
+                        await update.message.reply_text(next_question['message'])
+                    except Exception as e2:
+                        self.log_error(f"Error sending message to user {user_id}: {e2}")
         
         return
 

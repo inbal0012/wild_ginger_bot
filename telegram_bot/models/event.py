@@ -36,5 +36,6 @@ class EventDTO:
     is_public: bool
     main_group_id: str
     singles_group_id: str
+    form_link: str
     created_at: str
     updated_at: str
