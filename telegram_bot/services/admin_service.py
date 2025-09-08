@@ -449,7 +449,7 @@ class AdminService:
         if language == 'he':
             return (
                 f"🎉 ברוכים הבאים {member_name}!\n\n"
-                f"אני בוט Wild Ginger כי כלנית עושה בדיקות למערכת שלה. 😜😁\n\n"
+                f"אני הבוט של Wild Ginger. ואני כאן כי כלנית עושה בדיקות למערכת שלה. 😜😁\n\n"
                 f"על מנת שיהיה לנו אירוע יותר נעים וכיפי אנא כתבו פוסט היכרות. הוא יכול להיות קצר או ארוך כרצונכם.\n"
                 f'נשמח אם תרשמו מאיפה אתם בארץ ע"מ לעודד טרמפים\n'
                 f'מעבר לכך מוזמנים לספר ככל העולה על דעתכם'
