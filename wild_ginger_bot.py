@@ -19,6 +19,7 @@ from telegram_bot.services.file_storage_service import FileStorageService
 from telegram_bot.services.registration_service import RegistrationService
 from telegram_bot.services.event_service import EventService
 from telegram_bot.services.poll_data_service import PollDataService
+from telegram_bot.services.admin_service import AdminService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -37,6 +38,7 @@ class WildGingerBot(BaseService):
         self.form_flow_service = FormFlowService(self.sheets_service)
         self.file_storage = FileStorageService()
         self.poll_data_service = PollDataService(self.sheets_service)
+        self.admin_service = AdminService(self.sheets_service, self.message_service)
         self.log_info("WildGingerBot initialized successfully")
     
     async def initialize(self) -> None:
@@ -386,6 +388,26 @@ class WildGingerBot(BaseService):
             await query.edit_message_text(text="Btn1 is pressed.")
         elif query.data == "btn2":
             await query.edit_message_text(text="Btn2 is pressed.")
+    
+    async def handle_new_chat_members(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle new members joining a group"""
+        try:
+            new_members = update.message.new_chat_members
+            chat_id = update.effective_chat.id
+            
+            self.log_info(f"New members joined group {chat_id}: {[member.id for member in new_members]}")
+            
+            # Send welcome message for each new member
+            for new_member in new_members:
+                # Skip if the new member is a bot (including this bot)
+                if new_member.is_bot:
+                    continue
+                
+                # Send welcome message using admin service
+                await self.admin_service.send_group_welcome_message(new_member, chat_id, self.app.bot)
+                
+        except Exception as e:
+            self.log_error(f"Error handling new chat members: {e}")
 
     async def get_language_from_user(self, user_id: str):
         user_data = self.user_service.get_user_by_telegram_id(user_id)
@@ -496,6 +518,9 @@ class WildGingerBot(BaseService):
         # Message handlers (must be after command handlers)
         # Listen to ALL text messages (except commands - they're handled above)
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_messages))
+        
+        # Handle new chat members joining groups
+        app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, self.handle_new_chat_members))
         
         # Set the post_init hook
         app.post_init = self.post_init

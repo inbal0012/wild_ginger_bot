@@ -419,4 +419,47 @@ class AdminService:
             
         except Exception as e:
             logger.error(f"Failed to send admin notification: {e}")
-            return False 
+            return False
+    
+    async def send_group_welcome_message(self, new_member, chat_id: int, bot) -> bool:
+        """Send welcome message to new group member"""
+        try:
+            # Get user language preference (default to English)
+            user_language = 'he' if new_member.language_code == 'he' else 'en'
+            
+            # Get welcome message based on language
+            welcome_message = self._get_group_welcome_message(user_language, new_member.first_name)
+            
+            # Send welcome message to the group
+            await bot.send_message(
+                chat_id=chat_id,
+                text=welcome_message,
+                parse_mode='Markdown'
+            )
+            
+            logger.info(f"📢 Welcome message sent to new member {new_member.id} in group {chat_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send welcome message to new member: {e}")
+            return False
+    
+    def _get_group_welcome_message(self, language: str, member_name: str) -> str:
+        """Get localized welcome message for new group members"""
+        if language == 'he':
+            return (
+                f"🎉 ברוכים הבאים {member_name}!\n\n"
+                f"אני בוט Wild Ginger כי כלנית עושה בדיקות למערכת שלה. 😜😁\n\n"
+                f"על מנת שיהיה לנו אירוע יותר נעים וכיפי אנא כתבו פוסט היכרות. הוא יכול להיות קצר או ארוך כרצונכם.\n"
+                f'נשמח אם תרשמו מאיפה אתם בארץ ע"מ לעודד טרמפים\n'
+                f'מעבר לכך מוזמנים לספר ככל העולה על דעתכם'
+            )
+        else:
+            return (
+                f"🎉 Welcome {member_name}!\n\n"
+                f"I'm the Wild Ginger bot and I'm here because Kalanit is testing her system 😜😁.\n\n"
+                f"To make this event more fun and pleasant, please write a get-to-know post. It can be short or long as you wish.\n"
+                f'We would appreciate it if you would share where you are from to promote carpooling\n'
+                f'In addition, we invite you to share whatever you want about yourself'
+                
+            ) 
