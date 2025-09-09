@@ -438,7 +438,7 @@ class AdminService:
             
             # Get welcome message based on language
             
-            if chat_id == -2948410296:
+            if chat_id == -1002948410296:
                 welcome_message = self._get_group_welcome_message_cocktails(new_member.username, bot)
             else:
                 welcome_message = self._get_group_welcome_message(user_language, new_member.first_name)
