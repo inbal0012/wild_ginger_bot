@@ -421,6 +421,15 @@ class AdminService:
             logger.error(f"Failed to send admin notification: {e}")
             return False
     
+    def _get_group_welcome_message_cocktails(self, member_username: str, bot) -> bool:
+        return (
+            f"🎉 ברוכים הבאים @{member_username}!\n\n"
+            f"אני הבוט של Wild Ginger. ואני כאן כי כלנית עושה בדיקות למערכת שלה. 😜😁\n\n"
+            f"על מנת שיהיה לנו אירוע יותר נעים וכיפי אנא כתבו פוסט היכרות. הוא יכול להיות קצר או ארוך כרצונכם.\n"
+            f'נשמח אם תרשמו מאיפה אתם בארץ ע"מ לעודד טרמפים\n'
+            f'מעבר לכך מוזמנים לספר ככל העולה על דעתכם'
+        )
+
     async def send_group_welcome_message(self, new_member, chat_id: int, bot) -> bool:
         """Send welcome message to new group member"""
         try:
@@ -428,7 +437,11 @@ class AdminService:
             user_language = 'he' if new_member.language_code == 'he' else 'en'
             
             # Get welcome message based on language
-            welcome_message = self._get_group_welcome_message(user_language, new_member.first_name)
+            
+            if chat_id == -2948410296:
+                welcome_message = self._get_group_welcome_message_cocktails(new_member.username, bot)
+            else:
+                welcome_message = self._get_group_welcome_message(user_language, new_member.first_name)
             
             # Send welcome message to the group
             await bot.send_message(
