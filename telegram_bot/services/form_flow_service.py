@@ -1096,7 +1096,7 @@ class FormFlowService(BaseService):
             
             success = await self.registration_service.update_registration_by_registration_id(form_state.registration_id, "form_complete", True)
             
-            status = Status.PENDING if form_state.get_answer("would_you_like_to_register") == "yes" else Status.UNINTERESTED
+            status = Status.PENDING # if form_state.get_answer("would_you_like_to_register") == "yes" else Status.UNINTERESTED
             success = await self.registration_service.update_registration_by_registration_id(form_state.registration_id, "status", status.value)
                         
             if success:
