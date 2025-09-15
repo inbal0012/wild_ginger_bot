@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 
 from telegram_bot.services.sheets_service import SheetsService
 from telegram_bot.models.registration import CreateRegistrationDTO, RegistrationStatus, Status, RegistrationData
@@ -36,6 +37,9 @@ class RegistrationService(BaseService):
             # Create a new row with empty values matching number of columns
             new_row = [""] * len(sheet_data['headers'])
 
+            # Get current timestamp for creation time
+            current_time = datetime.now().isoformat()
+
             # Fill in the provided registration data
             new_row[self.headers['registration_id']] = registration.id
             new_row[self.headers['user_id']] = registration.user_id
@@ -44,6 +48,9 @@ class RegistrationService(BaseService):
                 new_row[self.headers['status']] = registration.status.value
             else:
                 new_row[self.headers['status']] = registration.status
+            
+            # Set the creation timestamp
+            new_row[self.headers['created_at']] = current_time
 
             # Add the row to the sheet
             result = await self.sheets_service.append_row("Registrations", new_row)
