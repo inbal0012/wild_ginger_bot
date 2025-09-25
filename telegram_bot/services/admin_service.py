@@ -441,7 +441,7 @@ class AdminService:
             if chat_id == -1002948410296:
                 welcome_message = self._get_group_welcome_message_cocktails(new_member.username, bot)
             else:
-                welcome_message = self._get_group_welcome_message(user_language, new_member.first_name)
+                welcome_message = self._get_group_welcome_message(user_language, new_member.username)
             
             # Send welcome message to the group
             await bot.send_message(
@@ -461,18 +461,13 @@ class AdminService:
         """Get localized welcome message for new group members"""
         if language == 'he':
             return (
-                f"🎉 ברוכים הבאים {member_name}!\n\n"
-                f"אני הבוט של Wild Ginger. ואני כאן כי כלנית עושה בדיקות למערכת שלה. 😜😁\n\n"
-                f"על מנת שיהיה לנו אירוע יותר נעים וכיפי אנא כתבו פוסט היכרות. הוא יכול להיות קצר או ארוך כרצונכם.\n"
-                f'נשמח אם תרשמו מאיפה אתם בארץ ע"מ לעודד טרמפים\n'
-                f'מעבר לכך מוזמנים לספר ככל העולה על דעתכם'
+                f"🎉 ברוכים הבאים @{member_name}!\n\n"
+                f"מוזמן.ת לקרוא את הנעוצים בקבוצה ולהתעדכן.\n"
+                f"ולהציג את עצמך (לא חובה, אך מומלץ)\n"
             )
         else:
             return (
-                f"🎉 Welcome {member_name}!\n\n"
-                f"I'm the Wild Ginger bot and I'm here because Kalanit is testing her system 😜😁.\n\n"
-                f"To make this event more fun and pleasant, please write a get-to-know post. It can be short or long as you wish.\n"
-                f'We would appreciate it if you would share where you are from to promote carpooling\n'
-                f'In addition, we invite you to share whatever you want about yourself'
-                
+                f"🎉 Welcome @{member_name}!\n\n"
+                f"Please read the group's posts and stay updated.\n"
+                f"And introduce yourself (not required, but recommended)\n"                
             ) 
