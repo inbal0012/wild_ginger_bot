@@ -351,7 +351,7 @@ class WildGingerBot(BaseService):
                 except Exception as e:
                     # If markdown parsing fails, try sending without markdown
                     try:
-                        self.log_error(f"Markdown parsing failed for user {user_id}, retrying without markdown: {e}")
+                        self.log_error(f"Markdown parsing failed for user {user_id}, retrying without markdown: {e}\n{next_question['message']}")
                         await self.app.bot.send_message(user_id, next_question['message'])
                     except Exception as e2:
                         self.log_error(f"Error sending message to user {user_id}: {e2}")
