@@ -1229,7 +1229,15 @@ class FormFlowService(BaseService):
         for key, value in form_state.answers.items():
             message += f"\t{key}: {value}\n"
             
-        await self.bot.send_message(chat_id=self.admin_chat_id, text=message)
+        # if admin_chat_id contains a comma, send message to each chat_id
+        try:
+            if "," in self.admin_chat_id:
+                for chat_id in self.admin_chat_id.split(","):
+                    await self.bot.send_message(chat_id=chat_id, text=message)
+            else:
+                await self.bot.send_message(chat_id=self.admin_chat_id, text=message)
+        except Exception as e:
+            self.log_error(f"Error sending admin notification: {e}")
     
     async def _auto_mark_get_to_know_complete(self, form_state: FormState) -> bool:
         """Auto-mark get-to-know complete for returning participants."""

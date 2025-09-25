@@ -63,7 +63,7 @@ class SheetsService(BaseService):
         try:
             target_sheet = self.spreadsheet.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{sheet_name}!A1:ZZ1000"
+                range=f"{sheet_name}!A1:ZZ10000"
             ).execute()
             
             values = target_sheet.get('values', [])
